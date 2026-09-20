@@ -1,4 +1,4 @@
-protocol_version: 3
+protocol_version: 4
 frozen_on: 2026-09-21
 research_question: "Does the HEWJ-minus-EWJ daily return spread offset yen appreciation, and did the conditional slope change after 2020-03-11?"
 data:
@@ -20,7 +20,7 @@ robustness:
     quadratic: "add JPY_app^2 and JPY_app^2 x Post while preserving hierarchy"
     yeo_johnson_lambda_grid: {minimum: -2.0, maximum: 2.0, step: 0.05}
     yeo_johnson_selection: "maximum Gaussian regression likelihood with Jacobian on training data only"
-    decision_rule: "diagnostic/tuning sensitivity only; do not reopen the already locked primary held-out test"
+    decision_rule: "diagnostic/rolling-origin sensitivity only; do not reopen the already locked primary held-out test"
   influence:
     primary_policy: "retain every valid observation"
     winsorization: "0.5th/99.5th percentiles for Y and all continuous predictors"
@@ -33,15 +33,19 @@ robustness:
     rule: "for each candidate, omit that date and define Post as dates strictly after it"
 prediction:
   role: secondary
-  split: chronological
-  proportions: {train: 0.60, tuning: 0.20, test: 0.20}
-  selection_metric: RMSE
-  test_policy: "evaluate once after selecting on tuning and refitting on train+tuning"
+  split: expanding-window rolling-origin with untouched final test
+  final_test: {start: 2024-01-24, end: 2026-07-31}
+  rolling_origin_folds:
+    - {train_end: 2020-12-31, validation_start: 2021-01-01, validation_end: 2021-12-31}
+    - {train_end: 2021-12-31, validation_start: 2022-01-01, validation_end: 2022-12-31}
+    - {train_end: 2022-12-31, validation_start: 2023-01-01, validation_end: 2023-12-31}
+  selection_metric: mean validation RMSE across folds
+  test_policy: "select using rolling-origin validation, refit on all data through 2024-01-23, then evaluate final test once"
   candidates:
     - {name: "FX interaction", formula: "Y ~ JPY_app * Post"}
     - {name: "Macro controls", formula: "Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff"}
     - {name: "Full factor model", formula: "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"}
-  locked_winner: "Macro controls"
+  locked_winner: "FX interaction"
   benchmarks: [historical_mean, zero_return]
 randomness:
   stochastic_steps: false

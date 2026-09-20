@@ -26,13 +26,13 @@ output:
 This standalone file imports the frozen source data, computes every price return
 on its native calendar before merging, enforces a common return interval, fits
 OLS with Newey-West HAC inference, runs diagnostics, and performs a strict
-chronological 60%/20%/20% train/tuning/test evaluation. The test period is used
-once, after the predictive model is selected on the tuning period.
+expanding-window rolling-origin evaluation. Calendar years 2021, 2022, and 2023
+are successive validation windows; the 2024-01-24 onward test period is used once.
 
 本文件可独立读取冻结数据、在各数据自身交易日历内计算收益、执行严格同期合并、
 拟合 OLS 并使用 Newey-West HAC 推断，同时完成诊断、非线性检验、异常值敏感性、
-断点日期敏感性和固定的 60%/20%/20% 时间切分。原始测试集结论保持锁定，后续新增
-函数形式只在调优集比较，不重新利用测试集选模。
+断点日期敏感性和扩展窗口 rolling-origin 验证。2021、2022、2023 年依次作为验证窗，
+2024-01-24 之后的最终测试集只评估一次，不参与选模。
 
 ## Complete analysis code
 
@@ -51,19 +51,21 @@ interaction. Model optimization is a separate, secondary prediction exercise.
 推断模型。模型精简只用于次要的样本外条件拟合检查，两种职责不混用。
 
 ```{{r model-selection-table, echo=FALSE}}
-knitr::kable(tuning_metrics, digits = 6,
-             caption = "Three predeclared candidates evaluated on the tuning period")
+knitr::kable(rolling_origin_fold_metrics, digits = 6,
+             caption = "Fold-level rolling-origin validation metrics")
+knitr::kable(model_selection_rolling_origin, digits = 6,
+             caption = "Three predeclared candidates ranked by mean validation RMSE")
 ```
 
-The macro-control candidate has the lowest tuning RMSE, so its locked formula is
-`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`. It is refitted on
-train+tuning and evaluated exactly once on the untouched test set. Variables
-were therefore removed by a predeclared out-of-sample rule, not by individual
-p-values or by inspecting the test result.
+`selected_model_name` records the candidate with the lowest mean RMSE across the
+three rolling-origin folds. It is refitted on every development observation
+through 2024-01-23 and evaluated exactly once on the untouched test set.
+Variables are therefore removed by a predeclared out-of-sample rule, not by
+individual p-values or by inspecting the test result.
 
-宏观控制模型的调优 RMSE 最低，因此最终预测公式保留汇率交互、日经收益、VIX
-变化和滞后利差。它在训练集加调优集上重新拟合后，只对未接触的测试集评估一次；
-删减依据是预设样本外规则，而不是单个 p 值或测试集结果。
+最终预测模型由三个滚动验证窗的平均 RMSE 决定，再用截至 2024-01-23 的全部开发
+数据重新拟合，并只在未接触测试集上评估一次。删减依据是预设样本外规则，而不是
+单个 p 值或测试集结果。
 
 ## Main results / 主要结果
 
@@ -117,17 +119,17 @@ these residual features disappear.
 
 ```{{r robustness-tables, echo=FALSE}}
 knitr::kable(functional_form_sensitivity, digits = 6,
-             caption = "Functional-form sensitivity; nonlinear alternatives use tuning only")
+             caption = "Functional-form sensitivity under rolling-origin validation")
 knitr::kable(influence_sensitivity, digits = 6,
              caption = "Influential-observation sensitivity")
 knitr::kable(break_date_sensitivity, digits = 6,
              caption = "Declared pandemic-break window")
 ```
 
-The quadratic terms are jointly significant under HAC(5), but the quadratic
-model has worse tuning RMSE than the primary linear full model. The Yeo-Johnson
-lambda selected on training data is close to one and improves tuning RMSE only
-slightly; it does not resolve the diagnostic rejections and makes the hedge
+The quadratic terms are jointly significant under HAC(5), but predictive form
+is judged by rolling-origin RMSE rather than in-sample significance. The
+Yeo-Johnson lambda is reselected inside every fold; it does not resolve the
+diagnostic rejections and makes the hedge
 slope less directly interpretable. The sign and incomplete-hedge conclusion are
 stable, but the 5% significance of the pandemic slope change is not: it changes
 under winsorization, Cook's-distance deletion, and the earliest declared break
@@ -135,8 +137,8 @@ date. Therefore the honest final statement is that the post-period slope is
 numerically more negative, while evidence for a discrete pandemic change is
 sensitive to defensible analysis choices.
 
-二次项在 HAC(5) 下联合显著，但二次模型的调优 RMSE 更差。训练集选出的
-Yeo-Johnson 参数接近 1，只带来很小的调优改善，也没有消除诊断拒绝，并削弱斜率
+二次项在 HAC(5) 下联合显著，但预测函数形式按 rolling-origin RMSE 判断。
+Yeo-Johnson 参数在每个折内重新选择；它没有消除诊断拒绝，并削弱斜率
 的直接对冲比率解释。方向和“不完全对冲”结论稳定，但疫情斜率变化是否在 5%
 水平显著会随缩尾、Cook 距离删除和最早备选断点而改变。因此最终结论应写为：
 疫情后斜率在数值上更负，但“疫情造成离散改变”的统计证据对合理分析选择敏感。
@@ -160,10 +162,11 @@ one-command workflow and interpretation limits.
 ```{{r generated-figures, echo=FALSE, out.width="95%", fig.align="center"}}
 figure_files <- file.path(figures_dir, c(
   "chronological_split.png",
+  "rolling_origin_folds.png",
   "fx_slope_by_period.png",
   "coefficient_intervals_hac5.png",
   "hac_lag_sensitivity.png",
-  "tuning_model_comparison.png",
+  "rolling_origin_model_comparison.png",
   "heldout_test_predictions.png",
   "residual_diagnostics.png",
   "robustness_sensitivity.png",

@@ -16,10 +16,11 @@ Private, reproducible course project studying whether the daily return spread be
 | Interaction p, classical / 经典 p 值 | 0.00931 |
 | Interaction p, HAC(5) / HAC(5) p 值 | 0.10439 |
 | Implied post-period slope / 疫情后隐含斜率 | -0.912143 |
-| Selected predictive model / 最终预测模型 | Macro controls / 宏观控制模型 |
-| Held-out test RMSE / 留出测试 RMSE | 0.3116 vs 0.6532 mean benchmark |
+| Selected predictive model / 最终预测模型 | FX interaction / 汇率交互模型 |
+| Rolling-origin mean RMSE / 滚动验证平均 RMSE | 0.26665 |
+| Held-out test RMSE / 留出测试 RMSE | 0.3159 vs 0.6532 mean benchmark |
 | Quadratic terms, HAC(5) joint p / 二次项联合 p 值 | 0.02880 |
-| Yeo-Johnson lambda / Yeo-Johnson 参数 | 0.95, selected on train only |
+| Yeo-Johnson lambda / Yeo-Johnson 参数 | 1.00 on development data |
 | Break-window interaction p / 断点窗口交互 p 值 | 0.03028–0.15997 |
 
 The pandemic interaction is significant with conventional OLS standard errors but not with Newey-West HAC(5). Both period-specific slopes remain significantly different from the complete-hedge benchmark of -1 under HAC(5), supporting incomplete hedging in both periods. The break is associational, not causal.
@@ -41,32 +42,33 @@ change is not stable across reasonable specifications.
 1. Each price series is converted to a log return on its own native calendar before merging.
 2. The primary sample keeps only rows sharing the same return start and end dates across HEWJ/EWJ, USD/JPY, Nikkei 225, and VIX; a same-end-date-only sample is reported separately as sensitivity analysis.
 3. The full inferential model is fitted first with `JPY_app * Post`, Nikkei return, SMB, HML, RMW, CMA, MOM, VIX change, and the lagged rate differential. Because residuals are not iid, primary inference uses Newey-West HAC(5), with HAC(1) and HAC(10) sensitivity checks.
-4. Prediction is secondary and uses a fixed chronological 60% train / 20% tuning / 20% untouched test split. The predeclared candidates are FX interaction only, macro controls, and the full factor model. Tuning RMSE selects the macro-control model; it is refit on train+tuning and evaluated once on test.
-5. A quadratic yen model and a Yeo-Johnson response are evaluated on training/tuning only; the already locked test-set decision is not reopened.
+4. Prediction is secondary and uses expanding-window rolling-origin validation. Models trained through 2020, 2021, and 2022 are validated on 2021, 2022, and 2023. Mean validation RMSE selects the FX-interaction model; it is refit on all development data through 2024-01-23 and evaluated once on the untouched final test.
+5. A quadratic yen model and a Yeo-Johnson response use the same folds; Yeo-Johnson lambda selection occurs inside each fold, and neither analysis reopens the final test choice.
 6. The primary model keeps all valid observations. Winsorization and Cook's-distance deletion are labelled sensitivity/stress tests, not replacements chosen by significance.
 7. March 6, March 11, and March 16, 2020 are evaluated as a declared break window without selecting the lowest p-value.
 8. No random shuffling, test-set tuning, or stochastic training is used. OLS is deterministic, so repeated random seeds are not applicable.
 
 The held-out exercise measures conditional fit using same-day observed predictors; it is not an ahead-of-time trading forecast.
 
-对应中文：各价格序列先独立计算收益，再做严格同期合并；先拟合全变量模型并用 OLS 系数加 Newey-West 标准误完成核心推断；预测采用固定的 60%/20%/20% 时间切分，在三个预设候选模型中由调优 RMSE 选出宏观控制模型，测试集不参与选模。
+对应中文：各价格序列先独立计算收益，再做严格同期合并；先拟合全变量模型并用 OLS 系数加 Newey-West 标准误完成核心推断；预测采用扩展窗口 rolling-origin，以 2021、2022、2023 为连续验证年，按平均 RMSE 选出汇率交互模型，2024-01-24 之后的测试集不参与选模。
 这里检验的是使用当日已观测变量的样本外条件拟合，不是提前预测未来收益的交易策略。
 
 | Split / 数据集 | Rows / 行数 | Dates / 日期 | Purpose / 用途 |
 |---|---:|---|---|
-| Train | 1,593 | 2014-02-06–2021-07-20 | Fit candidates / 拟合候选模型 |
-| Tuning | 531 | 2021-07-21–2024-01-23 | Select by RMSE / 按 RMSE 选模 |
+| Development | 2,124 | 2014-02-06–2024-01-23 | Three rolling-origin folds, then final refit / 三折滚动验证后重拟合 |
 | Test | 531 | 2024-01-24–2026-07-31 | One final evaluation / 一次最终评估 |
 
 ## Visual results / 结果可视化
 
 ![Chronological split](figures/chronological_split.png)
 
+![Rolling-origin folds](figures/rolling_origin_folds.png)
+
 ![FX slope by period](figures/fx_slope_by_period.png)
 
 ![HAC lag sensitivity](figures/hac_lag_sensitivity.png)
 
-![Tuning comparison](figures/tuning_model_comparison.png)
+![Rolling-origin comparison](figures/rolling_origin_model_comparison.png)
 
 ![Held-out predictions](figures/heldout_test_predictions.png)
 
@@ -160,7 +162,7 @@ This command:
 - `submission/` - staged PDF, standalone Rmd, original CSV exports/copies, cleaned CSV, checklist, and hashes.
 - `results/R_run_log.txt` - R version, package versions, sample and results.
 - `docs/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
-- `results/model_selection_tuning.csv` and `results/heldout_test_metrics.csv` - tuning and untouched-test evidence.
+- `results/rolling_origin_fold_metrics.csv`, `results/model_selection_rolling_origin.csv`, and `results/heldout_test_metrics.csv` - rolling validation and untouched-test evidence.
 - `results/data_alignment_audit.csv` and `results/data_alignment_sensitivity.csv` - date-interval audit and robustness result.
 - `results/functional_form_sensitivity.csv` - quadratic and Yeo-Johnson checks without reopening test selection.
 - `results/influence_audit.csv` and `results/influence_sensitivity.csv` - row-level influence audit and declared stress tests.

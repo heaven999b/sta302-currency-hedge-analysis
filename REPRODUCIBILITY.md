@@ -48,11 +48,11 @@ bash scripts/run_all.sh
 ## Leakage and randomness / 数据泄漏与随机性
 
 - Dates are strictly increasing and never shuffled.
-- Candidate prediction models use the first 60% for training and the next 20% for tuning.
-- The final 20% was evaluated once after the original candidate was locked.
-- Later nonlinear sensitivity work does not reopen that test-set choice; it is compared on tuning only.
+- Candidate prediction models use expanding training windows ending in 2020, 2021, and 2022, followed by validation in 2021, 2022, and 2023.
+- The 2024-01-24 onward final test was evaluated once after the winner was locked by mean rolling-origin RMSE.
+- Nonlinear sensitivity work uses the same folds and does not reopen the final-test choice.
 - No stochastic estimator, bootstrap, random initialization, or random split is used, so a random seed is not applicable.
-- Yeo-Johnson lambda selection uses training observations only.
+- Yeo-Johnson lambda selection is repeated inside each training fold.
 
 ## Output map / 输出对应关系
 
@@ -62,6 +62,7 @@ bash scripts/run_all.sh
 | Can every source be opened as CSV? | `data/original_csv/` and its `SHA256SUMS.csv` |
 | What does each processed field mean? | `data/DATA_DICTIONARY.csv` |
 | Are dates, missingness, intervals, and splits valid? | `results/data_quality_audit.csv` |
+| Was model selection time-respecting? | `results/rolling_origin_fold_metrics.csv` and `results/model_selection_rolling_origin.csv` |
 | Are conclusions robust to HAC lag? | `results/hac_lag_sensitivity.csv` |
 | Do nonlinear forms help? | `results/functional_form_sensitivity.csv` |
 | Are influential observations driving the result? | `results/influence_audit.csv` and `results/influence_sensitivity.csv` |

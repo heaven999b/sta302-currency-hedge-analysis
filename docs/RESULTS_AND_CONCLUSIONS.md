@@ -27,24 +27,23 @@ full model is
 It uses all ten predictors required by the proposal and remains the
 pre-specified model for the hedge-slope and period-interaction inference.
 
-For secondary conditional prediction, three candidates were fitted on the
-1,593-row training period: the FX-interaction model, the macro-control model,
-and the full factor model. Their tuning RMSE values were 0.30662, 0.30619, and
-0.30747, respectively. The macro-control model therefore won under the locked
-rule and has final formula
-`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`.
-It was refitted on train+tuning before one untouched-test evaluation. This
-reduction was selected by out-of-sample RMSE, not by deleting insignificant
-coefficients.
+For secondary conditional prediction, three candidates were compared using
+expanding-window rolling-origin validation. Models trained through 2020, 2021,
+and 2022 were scored on 2021, 2022, and 2023. Mean RMSE was 0.26665 for the
+FX-interaction model, 0.27417 for macro controls, and 0.27637 for the full factor
+model. The FX-interaction model therefore won under the locked rule and has
+formula `Y ~ JPY_app * Post`. It was refitted on all 2,124 development rows
+through 2024-01-23 before one untouched-test evaluation. Reduction was selected
+by time-respecting out-of-sample RMSE, not by deleting insignificant coefficients.
 
 本研究刻意区分解释性推断和预测。初始完整模型为
 `Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff`，
 包含 proposal 要求的全部十个预测变量，并继续承担日元斜率和时期交互项的预设推断。
-次要预测环节仅在 1,593 条训练样本上拟合汇率交互、宏观控制和完整因子三个候选模型；
-其调优 RMSE 分别为 0.30662、0.30619 和 0.30747。因此按锁定规则选择宏观控制模型：
-`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`。
-该模型用训练集加调优集重新拟合后，只在未接触的测试集上评估一次。精简依据是样本外
-RMSE，而不是删除不显著变量。
+次要预测环节采用扩展窗口 rolling-origin：分别用截至 2020、2021、2022 年的数据
+训练，并在 2021、2022、2023 年验证。汇率交互、宏观控制和完整因子模型的三折平均
+RMSE 分别为 0.26665、0.27417 和 0.27637，因此锁定汇率交互模型
+`Y ~ JPY_app * Post`。该模型用截至 2024-01-23 的 2,124 条开发样本重新拟合后，
+只在未接触测试集上评估一次。精简依据是遵守时间顺序的样本外 RMSE，而不是 p 值。
 
 ## Main inference / 主要推断
 
@@ -57,19 +56,19 @@ RMSE，而不是删除不显著变量。
 没有足够证据认定疫情前后斜率发生变化。两个时期的斜率都显著不同于 -1，
 所以更稳妥的结论是：两个时期均存在不完全对冲，而不是疫情导致了显著变化。
 
-## Chronological prediction check / 时间顺序预测检验
+## Rolling-origin prediction check / 滚动起点预测检验
 
-The fixed split is 1,593 train rows, 531 tuning rows, and 531 untouched test
-rows. The macro-control candidate has the lowest tuning RMSE (0.30619), narrowly
-ahead of the FX-interaction model (0.30662), and is therefore locked before test
-evaluation. After refitting on train+tuning, its test RMSE is 0.31159 and MAE is
-0.21781, compared with 0.65316 and 0.46087 for the historical-mean benchmark.
+The three validation windows contain 211, 211, and 217 observations. The
+FX-interaction candidate has the lowest mean validation RMSE (0.26665) and is
+locked before test evaluation. After refitting on all development data, its
+test RMSE is 0.31589 and MAE is 0.21576, compared with 0.65316 and 0.46087 for
+the historical-mean benchmark.
 This is a held-out conditional-fit check using same-day observed predictors, not
 an ahead-of-time return forecast or trading backtest.
 
-固定时间切分为 1,593 条训练、531 条调优、531 条最终测试。宏观控制模型在
-调优集 RMSE 最低，因此在查看测试结果前锁定；其测试 RMSE 为 0.31159、MAE
-为 0.21781，明显优于历史均值基准的 0.65316 和 0.46087。
+三个验证窗分别有 211、211、217 条观测。汇率交互模型的三折平均 RMSE 最低
+（0.26665），因此在查看测试结果前锁定；用全部开发数据重拟合后，其测试 RMSE
+为 0.31589、MAE 为 0.21576，明显优于历史均值基准的 0.65316 和 0.46087。
 该结果是使用当日已观测预测变量的样本外条件拟合检查，不是提前收益预测或交易回测。
 
 ## Diagnostics and limits / 诊断与限制
@@ -87,23 +86,23 @@ is a descriptive break, and the results concern one ETF pair.
 
 The promised nonlinear checks are now complete. A hierarchy-preserving model
 adds `JPY_app^2` and `JPY_app^2 x Post`. The two quadratic terms are jointly
-significant under HAC(5) (p = 0.0288), but its tuning RMSE is 0.31111, worse than
-0.30747 for the corresponding linear full model. It also does not remove RESET,
+significant under HAC(5) (p = 0.0288), but its mean rolling-origin RMSE is
+0.28180, worse than 0.27637 for the corresponding linear full model. It also does not remove RESET,
 heteroskedasticity, serial dependence, or heavy-tail rejections.
 
-The Yeo-Johnson response parameter was selected only on the training period from
-a fixed -2 to 2 grid. The selected lambda is 0.95, close to the untransformed
-value of 1. Its inverse-transformed tuning RMSE is 0.30451, a small improvement,
+The Yeo-Johnson response parameter was reselected inside each training fold from
+a fixed -2 to 2 grid. Fold lambdas were 0.95, 0.95, and 1.00; its mean
+inverse-transformed rolling-origin RMSE is 0.27531, a small improvement,
 but the transformed model still fails the same broad diagnostic families and
 its slope is no longer a directly interpretable hedge ratio. It is therefore
 reported as sensitivity evidence, not substituted for the primary model after
 the test set had already been locked.
 
 预先承诺的非线性检验已经完成。保留层级原则的二次模型加入 `JPY_app^2` 及其与
-`Post` 的交互项；两个二次项在 HAC(5) 下联合 p = 0.0288，但调优 RMSE 为
-0.31111，差于对应线性完整模型的 0.30747，也没有消除 RESET、异方差、序列相关
-和厚尾问题。Yeo-Johnson 参数只用训练集在固定网格上选择，得到 0.95，接近不变换
-的 1。其逆变换调优 RMSE 为 0.30451，只是轻微改善，且斜率不再能直接解释为对冲
+`Post` 的交互项；两个二次项在 HAC(5) 下联合 p = 0.0288，但三折平均 RMSE 为
+0.28180，差于对应线性完整模型的 0.27637，也没有消除 RESET、异方差、序列相关
+和厚尾问题。Yeo-Johnson 参数在各训练折内重新选择，依次为 0.95、0.95、1.00；
+其逆变换平均 RMSE 为 0.27531，只是轻微改善，且斜率不再能直接解释为对冲
 比率。因此两者都作为敏感性证据报告，不在测试集已锁定后替换主模型。
 
 ## Influence and break-date sensitivity / 影响点与断点日期敏感性

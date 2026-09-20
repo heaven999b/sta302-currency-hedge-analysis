@@ -618,7 +618,7 @@ def english_content(sections, styles, official_heading=True):
         "Data description (289 words)",
         "Ethics discussion (198 words)",
         "Preliminary results (391 words including captions)",
-        "Plan for the remaining analysis (292 words)",
+        "Plan for the remaining analysis (299 words)",
         "References",
         "Data and product documentation",
         "Submission items requiring group confirmation",

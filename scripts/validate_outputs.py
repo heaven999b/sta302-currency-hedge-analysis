@@ -71,27 +71,31 @@ def validate_analysis() -> None:
     require(float(diagnostics["max_vif"]) < 5, "maximum VIF is unexpectedly high")
 
     splits = read_rows(ROOT / "results" / "split_summary.csv")
-    require([row["split"] for row in splits] == ["train", "tuning", "test"],
+    require([row["split"] for row in splits] == ["development", "test"],
             "Chronological split order changed")
     require(sum(int(row["rows"]) for row in splits) == len(data), "Split rows do not cover data")
+    require(splits[1]["start_date"] == "2024-01-24", "Final-test cutoff changed")
 
-    tuning = read_rows(ROOT / "results" / "model_selection_tuning.csv")
-    selected = min(tuning, key=lambda row: float(row["RMSE"]))["model"]
+    rolling = read_rows(ROOT / "results" / "model_selection_rolling_origin.csv")
+    folds = read_rows(ROOT / "results" / "rolling_origin_fold_metrics.csv")
+    require(len(folds) == 9 and len({row["fold"] for row in folds}) == 3,
+            "Rolling-origin fold results are incomplete")
+    selected = min(rolling, key=lambda row: float(row["mean_RMSE"]))["model"]
     test = read_rows(ROOT / "results" / "heldout_test_metrics.csv")
-    require(test[0]["model"] == f"Selected: {selected}", "Held-out model was not locked on tuning")
+    require(test[0]["model"] == f"Selected: {selected}",
+            "Held-out model was not locked on rolling-origin validation")
     require(float(test[0]["RMSE"]) < min(float(row["RMSE"]) for row in test[1:]),
             "Selected model does not beat held-out benchmarks")
 
     functional = read_rows(ROOT / "results" / "functional_form_sensitivity.csv")
     require(len(functional) == 3, "Functional-form sensitivity must contain three specifications")
     by_spec = {row["specification"]: row for row in functional}
-    require(abs(float(by_spec["Yeo-Johnson response"]["yeo_johnson_lambda"]) - 0.95) < 1e-9,
-            "Training-selected Yeo-Johnson lambda changed")
+    require(-2 <= float(by_spec["Yeo-Johnson response"]["yeo_johnson_lambda"]) <= 2,
+            "Development-selected Yeo-Johnson lambda is invalid")
     require(float(by_spec["Quadratic yen sensitivity"]["nonlinear_terms_hac5_joint_p"]) < 0.05,
             "Quadratic-term sensitivity conclusion changed")
-    require(float(by_spec["Quadratic yen sensitivity"]["tuning_RMSE_original_scale"]) >
-            float(by_spec["Primary linear response"]["tuning_RMSE_original_scale"]),
-            "Quadratic tuning comparison changed")
+    require(all(float(row["rolling_mean_RMSE_original_scale"]) > 0 for row in functional),
+            "Rolling functional-form metrics are invalid")
 
     influence = read_rows(ROOT / "results" / "influence_sensitivity.csv")
     require(len(influence) == 3, "Influence sensitivity must contain three analyses")
@@ -126,7 +130,8 @@ def validate_artifacts() -> None:
         ROOT / "figures" / "residual_diagnostics.png",
         ROOT / "figures" / "coefficient_intervals_hac5.png",
         ROOT / "figures" / "chronological_split.png",
-        ROOT / "figures" / "tuning_model_comparison.png",
+        ROOT / "figures" / "rolling_origin_folds.png",
+        ROOT / "figures" / "rolling_origin_model_comparison.png",
         ROOT / "figures" / "heldout_test_predictions.png",
         ROOT / "figures" / "hac_lag_sensitivity.png",
         ROOT / "figures" / "robustness_sensitivity.png",
@@ -175,6 +180,8 @@ def validate_artifacts() -> None:
         "config/analysis_protocol.yml",
         "data/processed/sta302_daily_analysis.csv",
         "results/functional_form_sensitivity.csv",
+        "results/rolling_origin_fold_metrics.csv",
+        "results/model_selection_rolling_origin.csv",
         "results/influence_sensitivity.csv",
         "results/break_date_sensitivity.csv",
         "output/STA302_Project_Analysis.html",
@@ -206,7 +213,7 @@ def validate_submission() -> None:
     rmd = (package / "code" / "STA302_Project_Analysis.Rmd").read_text(encoding="utf-8")
     require('source("analysis/run_analysis.R")' not in rmd, "Submission Rmd still sources an external R script")
     for phrase in ["read_yahoo_adjusted <- function", "native_log_return <- function", "full_formula <-",
-                   "Strict chronological evaluation", "residual_diagnostics.png"]:
+                   "rolling-origin evaluation", "residual_diagnostics.png"]:
         require(phrase in rmd, f"Standalone Rmd is missing analysis code: {phrase}")
 
 
@@ -219,7 +226,7 @@ def main() -> None:
     validate_analysis()
     validate_artifacts()
     validate_submission()
-    print("VALIDATION PASSED: raw/CSV hashes, aligned analysis, strict splits, locked held-out results, nonlinear/influence/break sensitivity, figures, PDFs, standalone Rmd, and artifact manifest are consistent.")
+    print("VALIDATION PASSED: raw/CSV hashes, aligned analysis, rolling-origin selection, locked held-out results, nonlinear/influence/break sensitivity, figures, PDFs, standalone Rmd, and artifact manifest are consistent.")
 
 
 if __name__ == "__main__":

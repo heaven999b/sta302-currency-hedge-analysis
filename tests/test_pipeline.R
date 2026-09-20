@@ -12,21 +12,28 @@ data$date <- as.Date(data$date)
 require_true(nrow(data) == 2655L, "Unexpected analysis row count")
 require_true(!anyDuplicated(data$date), "Duplicate analysis dates")
 require_true(all(diff(data$date) > 0), "Dates are not strictly increasing")
-require_true(identical(unique(data$split), c("train", "tuning", "test")), "Split order changed")
+require_true(identical(unique(data$split), c("development", "test")), "Split order changed")
 
 splits <- read_result("split_summary.csv")
 require_true(sum(splits$rows) == nrow(data), "Split rows do not cover the sample")
-require_true(as.Date(splits$end_date[1]) < as.Date(splits$start_date[2]), "Train/tuning overlap")
-require_true(as.Date(splits$end_date[2]) < as.Date(splits$start_date[3]), "Tuning/test overlap")
+require_true(as.Date(splits$end_date[1]) < as.Date(splits$start_date[2]), "Development/test overlap")
+require_true(as.Date(splits$start_date[2]) == as.Date("2024-01-24"), "Final-test cutoff changed")
 
 alignment <- read_result("data_alignment_audit.csv")
 require_true(all(alignment$final_joint_interval_rows == nrow(data)), "Alignment sample mismatch")
 require_true(all(alignment$exact_interval_start_matches_Y >= nrow(data)), "Invalid interval audit")
 
-tuning <- read_result("model_selection_tuning.csv")
+rolling <- read_result("model_selection_rolling_origin.csv")
+folds <- read_result("rolling_origin_fold_metrics.csv")
 test <- read_result("heldout_test_metrics.csv")
 selected <- sub("^Selected: ", "", test$model[1])
-require_true(selected == tuning$model[which.min(tuning$RMSE)], "Test model was not selected on tuning RMSE")
+require_true(selected == rolling$model[which.min(rolling$mean_RMSE)],
+             "Test model was not selected on rolling-origin mean RMSE")
+require_true(nrow(folds) == 9L && length(unique(folds$fold)) == 3L,
+             "Rolling-origin fold results are incomplete")
+require_true(identical(sort(unique(as.character(folds$validation_start))),
+                       c("2021-01-05", "2022-01-05", "2023-01-05")),
+             "Rolling-origin validation windows changed")
 require_true(test$RMSE[1] < min(test$RMSE[-1]), "Selected model does not beat test benchmarks")
 
 hac <- read_result("coefficients_hac5.csv")
@@ -66,7 +73,8 @@ require_true(nrow(csv_manifest) == 7L, "Original-source CSV export is incomplete
 
 required_figures <- c("chronological_split.png", "fx_slope_by_period.png",
                       "coefficient_intervals_hac5.png", "hac_lag_sensitivity.png",
-                      "tuning_model_comparison.png", "heldout_test_predictions.png",
+                      "rolling_origin_folds.png", "rolling_origin_model_comparison.png",
+                      "heldout_test_predictions.png",
                       "residual_diagnostics.png", "robustness_sensitivity.png",
                       "influence_diagnostics.png")
 for (figure in required_figures) {
@@ -74,4 +82,4 @@ for (figure in required_figures) {
   require_true(file.exists(target) && file.info(target)$size > 1000, paste("Missing figure", figure))
 }
 
-cat("R PIPELINE TESTS PASSED: alignment, chronological split, tuning lock, held-out test, HAC, nonlinear, influence, break-date, CSV-export, and figure checks.\n")
+cat("R PIPELINE TESTS PASSED: alignment, rolling-origin selection, held-out test, HAC, nonlinear, influence, break-date, CSV-export, and figure checks.\n")

@@ -431,31 +431,54 @@ jb_stat <- primary_diagnostics$jarque_bera_stat
 jb_p <- primary_diagnostics$jarque_bera_p
 cooks <- cooks.distance(full_model)
 
-# Strict chronological evaluation: 60% train, 20% tuning, 20% untouched test.
-# Model selection uses tuning only; test is evaluated once after the choice is locked.
-n_obs <- nrow(analysis_data)
-train_end_index <- floor(0.60 * n_obs)
-tuning_end_index <- floor(0.80 * n_obs)
-train <- analysis_data[seq_len(train_end_index), ]
-tuning <- analysis_data[(train_end_index + 1):tuning_end_index, ]
-test <- analysis_data[(tuning_end_index + 1):n_obs, ]
-analysis_data$split <- factor(c(rep("train", nrow(train)), rep("tuning", nrow(tuning)),
-                                rep("test", nrow(test))), levels = c("train", "tuning", "test"))
+# Expanding-window rolling-origin evaluation. Three calendar-year validation
+# windows select the predictive model; the 2024-01-24 onward test set is touched
+# once, only after the winner is locked and refitted on all development data.
+test_start_date <- as.Date("2024-01-24")
+development <- analysis_data[analysis_data$date < test_start_date, ]
+test <- analysis_data[analysis_data$date >= test_start_date, ]
+analysis_data$split <- factor(ifelse(analysis_data$date < test_start_date, "development", "test"),
+                              levels = c("development", "test"))
+
+rolling_origin_folds <- data.frame(
+  fold = c("Validate 2021", "Validate 2022", "Validate 2023"),
+  train_end = as.Date(c("2020-12-31", "2021-12-31", "2022-12-31")),
+  validation_start = as.Date(c("2021-01-01", "2022-01-01", "2023-01-01")),
+  validation_end = as.Date(c("2021-12-31", "2022-12-31", "2023-12-31"))
+)
 
 candidate_formulas <- list(
   "FX interaction" = baseline_formula,
   "Macro controls" = Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff,
   "Full factor model" = full_formula
 )
-tuning_metrics <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
-  fitted_candidate <- lm(candidate_formulas[[model_name]], data = train)
-  metrics <- prediction_metrics(tuning$Y, predict(fitted_candidate, newdata = tuning))
-  data.frame(model = model_name, RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]),
-             train_start = min(train$date), train_end = max(train$date),
-             tuning_start = min(tuning$date), tuning_end = max(tuning$date))
+rolling_origin_fold_metrics <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
+  do.call(rbind, lapply(seq_len(nrow(rolling_origin_folds)), function(i) {
+    fold_spec <- rolling_origin_folds[i, ]
+    fold_train <- development[development$date <= fold_spec$train_end, ]
+    fold_validation <- development[
+      development$date >= fold_spec$validation_start & development$date <= fold_spec$validation_end, ]
+    fitted_candidate <- lm(candidate_formulas[[model_name]], data = fold_train)
+    metrics <- prediction_metrics(fold_validation$Y,
+                                  predict(fitted_candidate, newdata = fold_validation))
+    data.frame(
+      model = model_name, fold = fold_spec$fold,
+      train_rows = nrow(fold_train), train_start = min(fold_train$date),
+      train_end = max(fold_train$date), validation_rows = nrow(fold_validation),
+      validation_start = min(fold_validation$date), validation_end = max(fold_validation$date),
+      RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"])
+    )
+  }))
 }))
-selected_model_name <- tuning_metrics$model[which.min(tuning_metrics$RMSE)]
-development <- rbind(train, tuning)
+
+model_selection_rolling_origin <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
+  rows <- rolling_origin_fold_metrics[rolling_origin_fold_metrics$model == model_name, ]
+  data.frame(model = model_name, folds = nrow(rows), mean_RMSE = mean(rows$RMSE),
+             sd_RMSE = sd(rows$RMSE), mean_MAE = mean(rows$MAE), sd_MAE = sd(rows$MAE),
+             worst_fold_RMSE = max(rows$RMSE))
+}))
+selected_model_name <- model_selection_rolling_origin$model[
+  which.min(model_selection_rolling_origin$mean_RMSE)]
 selected_model <- lm(candidate_formulas[[selected_model_name]], data = development)
 test_prediction <- as.numeric(predict(selected_model, newdata = test))
 historical_mean_prediction <- rep(mean(development$Y), nrow(test))
@@ -482,84 +505,102 @@ test_predictions <- data.frame(
 split_summary <- do.call(rbind, lapply(levels(analysis_data$split), function(split_name) {
   block <- analysis_data[analysis_data$split == split_name, ]
   data.frame(split = split_name, rows = nrow(block), start_date = min(block$date), end_date = max(block$date),
-             purpose = switch(split_name, train = "fit candidate models", tuning = "select by RMSE",
+             purpose = switch(split_name,
+                              development = "rolling-origin selection and final refit",
                               test = "one final held-out evaluation"))
 }))
 
-stopifnot(max(train$date) < min(tuning$date), max(tuning$date) < min(test$date))
+stopifnot(max(development$date) < min(test$date))
+stopifnot(all(rolling_origin_folds$train_end < rolling_origin_folds$validation_start))
 stopifnot(!anyDuplicated(analysis_data$date))
 
-# Functional-form sensitivity. These alternatives are evaluated on the tuning
-# period only and do not reopen the already locked held-out test decision.
+# Functional-form sensitivity uses the same rolling-origin folds and never
+# reopens the already locked held-out test decision.
 full_rhs <- "JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"
 quadratic_formula <- Y ~ JPY_app * Post + I(JPY_app^2) * Post + Nikkei_ret +
   SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff
-quadratic_train_model <- lm(quadratic_formula, data = train)
-quadratic_tuning_prediction <- predict(quadratic_train_model, newdata = tuning)
-quadratic_tuning_metrics <- prediction_metrics(tuning$Y, quadratic_tuning_prediction)
+quadratic_rolling_metrics <- do.call(rbind, lapply(seq_len(nrow(rolling_origin_folds)), function(i) {
+  fold_spec <- rolling_origin_folds[i, ]
+  fold_train <- development[development$date <= fold_spec$train_end, ]
+  fold_validation <- development[
+    development$date >= fold_spec$validation_start & development$date <= fold_spec$validation_end, ]
+  fitted <- lm(quadratic_formula, data = fold_train)
+  metrics <- prediction_metrics(fold_validation$Y, predict(fitted, newdata = fold_validation))
+  data.frame(fold = fold_spec$fold, RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]))
+}))
 quadratic_model <- lm(quadratic_formula, data = analysis_data)
 quadratic_diagnostics <- model_diagnostics(quadratic_model)
 quadratic_terms <- grep("I\\(JPY_app\\^2\\)", names(coef(quadratic_model)), value = TRUE)
 quadratic_wald <- joint_wald_test(quadratic_model, quadratic_terms,
                                   newey_west(quadratic_model, lag = 5))
 
-lambda_profile <- select_yeo_johnson_lambda(train, full_rhs)
+yeo_johnson_rolling_folds <- do.call(rbind, lapply(seq_len(nrow(rolling_origin_folds)), function(i) {
+  fold_spec <- rolling_origin_folds[i, ]
+  fold_train <- development[development$date <= fold_spec$train_end, ]
+  fold_validation <- development[
+    development$date >= fold_spec$validation_start & development$date <= fold_spec$validation_end, ]
+  fold_profile <- select_yeo_johnson_lambda(fold_train, full_rhs)
+  fold_lambda <- fold_profile$lambda[which.max(fold_profile$profile_score)]
+  transformed_train <- fold_train
+  transformed_train$Y_yj <- yeo_johnson(transformed_train$Y, fold_lambda)
+  fitted <- lm(as.formula(paste("Y_yj ~", full_rhs)), data = transformed_train)
+  prediction <- inverse_yeo_johnson(predict(fitted, newdata = fold_validation), fold_lambda)
+  metrics <- prediction_metrics(fold_validation$Y, prediction)
+  data.frame(fold = fold_spec$fold, lambda = fold_lambda,
+             RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]))
+}))
+
+lambda_profile <- select_yeo_johnson_lambda(development, full_rhs)
 selected_lambda <- lambda_profile$lambda[which.max(lambda_profile$profile_score)]
-train_yj <- train
-train_yj$Y_yj <- yeo_johnson(train_yj$Y, selected_lambda)
-yj_train_model <- lm(as.formula(paste("Y_yj ~", full_rhs)), data = train_yj)
-yj_tuning_prediction <- inverse_yeo_johnson(
-  predict(yj_train_model, newdata = tuning), selected_lambda
-)
-yj_tuning_metrics <- prediction_metrics(tuning$Y, yj_tuning_prediction)
 analysis_yj <- analysis_data
 analysis_yj$Y_yj <- yeo_johnson(analysis_yj$Y, selected_lambda)
 yj_model <- lm(as.formula(paste("Y_yj ~", full_rhs)), data = analysis_yj)
 yj_diagnostics <- model_diagnostics(yj_model)
 
-linear_tuning <- tuning_metrics[tuning_metrics$model == "Full factor model", ]
+linear_rolling <- model_selection_rolling_origin[
+  model_selection_rolling_origin$model == "Full factor model", ]
 functional_form_sensitivity <- rbind(
   data.frame(
     specification = "Primary linear response",
     response_scale = "Original percentage-point return spread",
     yeo_johnson_lambda = NA_real_, rows = nobs(full_model), parameters = length(coef(full_model)),
     adjusted_r_squared = summary(full_model)$adj.r.squared,
-    tuning_RMSE_original_scale = linear_tuning$RMSE,
-    tuning_MAE_original_scale = linear_tuning$MAE,
+    rolling_mean_RMSE_original_scale = linear_rolling$mean_RMSE,
+    rolling_mean_MAE_original_scale = linear_rolling$mean_MAE,
     reset_p = primary_diagnostics$reset_p,
     breusch_pagan_p = primary_diagnostics$breusch_pagan_p,
     breusch_godfrey_lag5_p = primary_diagnostics$breusch_godfrey_lag5_p,
     jarque_bera_p = primary_diagnostics$jarque_bera_p,
     nonlinear_terms_hac5_joint_p = NA_real_,
-    role = "Primary: directly interpretable hedge slope; held-out result remains locked"
+    role = "Primary: directly interpretable hedge slope; rolling-origin comparison"
   ),
   data.frame(
     specification = "Quadratic yen sensitivity",
     response_scale = "Original percentage-point return spread",
     yeo_johnson_lambda = NA_real_, rows = nobs(quadratic_model), parameters = length(coef(quadratic_model)),
     adjusted_r_squared = summary(quadratic_model)$adj.r.squared,
-    tuning_RMSE_original_scale = unname(quadratic_tuning_metrics["RMSE"]),
-    tuning_MAE_original_scale = unname(quadratic_tuning_metrics["MAE"]),
+    rolling_mean_RMSE_original_scale = mean(quadratic_rolling_metrics$RMSE),
+    rolling_mean_MAE_original_scale = mean(quadratic_rolling_metrics$MAE),
     reset_p = quadratic_diagnostics$reset_p,
     breusch_pagan_p = quadratic_diagnostics$breusch_pagan_p,
     breusch_godfrey_lag5_p = quadratic_diagnostics$breusch_godfrey_lag5_p,
     jarque_bera_p = quadratic_diagnostics$jarque_bera_p,
     nonlinear_terms_hac5_joint_p = quadratic_wald$p_value,
-    role = "Sensitivity: hierarchy-preserving quadratic terms; tuning only"
+    role = "Sensitivity: hierarchy-preserving quadratic terms; rolling-origin"
   ),
   data.frame(
     specification = "Yeo-Johnson response",
-    response_scale = "Yeo-Johnson transformed; inverse transformed for tuning metrics",
+    response_scale = "Yeo-Johnson transformed; inverse transformed for validation metrics",
     yeo_johnson_lambda = selected_lambda, rows = nobs(yj_model), parameters = length(coef(yj_model)),
     adjusted_r_squared = summary(yj_model)$adj.r.squared,
-    tuning_RMSE_original_scale = unname(yj_tuning_metrics["RMSE"]),
-    tuning_MAE_original_scale = unname(yj_tuning_metrics["MAE"]),
+    rolling_mean_RMSE_original_scale = mean(yeo_johnson_rolling_folds$RMSE),
+    rolling_mean_MAE_original_scale = mean(yeo_johnson_rolling_folds$MAE),
     reset_p = yj_diagnostics$reset_p,
     breusch_pagan_p = yj_diagnostics$breusch_pagan_p,
     breusch_godfrey_lag5_p = yj_diagnostics$breusch_godfrey_lag5_p,
     jarque_bera_p = yj_diagnostics$jarque_bera_p,
     nonlinear_terms_hac5_joint_p = NA_real_,
-    role = "Sensitivity: lambda selected on training data; slope loses direct hedge-ratio meaning"
+    role = "Sensitivity: lambda reselected inside each fold; slope loses direct hedge-ratio meaning"
   )
 )
 
@@ -622,30 +663,33 @@ break_date_sensitivity <- do.call(rbind, lapply(break_dates, function(cut_date) 
 
 data_quality_audit <- data.frame(
   check = c("processed_rows", "date_unique", "date_strictly_increasing", "complete_analysis_fields",
-            "exact_return_interval", "train_before_tuning", "tuning_before_test",
-            "split_rows_cover_sample", "stochastic_steps"),
+            "exact_return_interval", "development_before_test", "rolling_fold_order",
+            "rolling_validation_disjoint", "split_rows_cover_sample", "stochastic_steps"),
   status = c(
     nrow(analysis_data) == 2655L,
     !anyDuplicated(analysis_data$date),
     all(diff(analysis_data$date) > 0),
     !anyNA(analysis_data[, c("date", continuous_variables, "Post", "split")]),
     all(joint_interval_match[match(analysis_data$date, end_date_aligned$date)]),
-    max(train$date) < min(tuning$date),
-    max(tuning$date) < min(test$date),
+    max(development$date) < min(test$date),
+    all(rolling_origin_folds$train_end < rolling_origin_folds$validation_start),
+    all(rolling_origin_folds$validation_end[-nrow(rolling_origin_folds)] <
+          rolling_origin_folds$validation_start[-1]),
     sum(split_summary$rows) == nrow(analysis_data),
     FALSE
   ),
-  expected = c("2655", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "FALSE"),
+  expected = c("2655", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "FALSE"),
   detail = c(
     paste(nrow(analysis_data), "rows"),
     paste(length(unique(analysis_data$date)), "unique dates"),
     paste(min(analysis_data$date), "to", max(analysis_data$date)),
     paste("Missing values:", sum(is.na(analysis_data))),
     "HEWJ/EWJ, FX, Nikkei and VIX return start/end dates agree",
-    paste(max(train$date), "<", min(tuning$date)),
-    paste(max(tuning$date), "<", min(test$date)),
+    paste(max(development$date), "<", min(test$date)),
+    "Each expanding training window ends before its validation year",
+    "Validation windows are the non-overlapping calendar years 2021, 2022, and 2023",
     paste(sum(split_summary$rows), "rows assigned once"),
-    "OLS, deterministic transformations and fixed chronological splits; seed not applicable"
+    "OLS, deterministic transformations and fixed rolling-origin folds; seed not applicable"
   )
 )
 stopifnot(all(data_quality_audit$status == (data_quality_audit$expected == "TRUE" | data_quality_audit$expected == "2655")))
@@ -685,19 +729,26 @@ write.csv(alignment_audit, file.path(results_dir, "data_alignment_audit.csv"), r
 write.csv(alignment_model_sensitivity, file.path(results_dir, "data_alignment_sensitivity.csv"), row.names = FALSE)
 write.csv(hac_sensitivity, file.path(results_dir, "hac_lag_sensitivity.csv"), row.names = FALSE)
 write.csv(split_summary, file.path(results_dir, "split_summary.csv"), row.names = FALSE)
-write.csv(tuning_metrics, file.path(results_dir, "model_selection_tuning.csv"), row.names = FALSE)
+write.csv(rolling_origin_fold_metrics, file.path(results_dir, "rolling_origin_fold_metrics.csv"),
+          row.names = FALSE)
+write.csv(model_selection_rolling_origin, file.path(results_dir, "model_selection_rolling_origin.csv"),
+          row.names = FALSE)
 write.csv(test_metrics, file.path(results_dir, "heldout_test_metrics.csv"), row.names = FALSE)
 write.csv(test_predictions, file.path(results_dir, "heldout_test_predictions.csv"), row.names = FALSE)
 write.csv(test_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
 write.csv(functional_form_sensitivity, file.path(results_dir, "functional_form_sensitivity.csv"),
           row.names = FALSE)
 write.csv(lambda_profile, file.path(results_dir, "yeo_johnson_lambda_profile.csv"), row.names = FALSE)
+write.csv(yeo_johnson_rolling_folds, file.path(results_dir, "yeo_johnson_rolling_folds.csv"),
+          row.names = FALSE)
 write.csv(influence_sensitivity, file.path(results_dir, "influence_sensitivity.csv"), row.names = FALSE)
 write.csv(influence_audit, file.path(results_dir, "influence_audit.csv"), row.names = FALSE)
 write.csv(break_date_sensitivity, file.path(results_dir, "break_date_sensitivity.csv"), row.names = FALSE)
 write.csv(data_quality_audit, file.path(results_dir, "data_quality_audit.csv"), row.names = FALSE)
 saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5,
              selected_model_name = selected_model_name, selected_model = selected_model,
+             rolling_origin_fold_metrics = rolling_origin_fold_metrics,
+             model_selection_rolling_origin = model_selection_rolling_origin,
              quadratic_model = quadratic_model, yeo_johnson_model = yj_model,
              yeo_johnson_lambda = selected_lambda, winsorized_model = winsorized_model,
              cooks_trimmed_model = cooks_trimmed_model),
@@ -716,21 +767,42 @@ legend("topright", legend = c("Pre: through 2020-03-10", "Post: from 2020-03-12"
 dev.off()
 
 png(file.path(figures_dir, "chronological_split.png"), width = 1800, height = 1100, res = 180)
-split_cols <- c(train = "#1f6aa5", tuning = "#e69f00", test = "#d94b36")
+split_cols <- c(development = "#1f6aa5", test = "#d94b36")
 plot(analysis_data$date, analysis_data$Y, pch = 16, cex = .35,
      col = adjustcolor(split_cols[as.character(analysis_data$split)], alpha.f = .35),
      xlab = "Date", ylab = "Daily return spread (%)",
-     main = "Chronological train / tuning / test split")
-abline(v = as.numeric(c(max(train$date), max(tuning$date))), lty = 2, col = "grey35")
+     main = "Development period and untouched final test")
+abline(v = as.numeric(max(development$date)), lty = 2, col = "grey35")
 legend("topright", legend = names(split_cols), col = split_cols, pch = 16, bty = "n")
 dev.off()
 
-png(file.path(figures_dir, "tuning_model_comparison.png"), width = 1600, height = 1100, res = 180)
-bar_cols <- ifelse(tuning_metrics$model == selected_model_name, "#1f6aa5", "#a9b6c2")
-bar_pos <- barplot(tuning_metrics$RMSE, names.arg = tuning_metrics$model, col = bar_cols,
-                   las = 1, ylab = "Tuning RMSE", main = "Model selection uses tuning period only",
-                   ylim = c(0, max(tuning_metrics$RMSE) * 1.18))
-text(bar_pos, tuning_metrics$RMSE, labels = sprintf("%.4f", tuning_metrics$RMSE), pos = 3)
+png(file.path(figures_dir, "rolling_origin_folds.png"), width = 1800, height = 1050, res = 180)
+par(mar = c(5.1, 9.2, 4.1, 2.1))
+plot(as.Date(c("2014-01-01", "2026-08-01")), c(0.5, 4.5), type = "n", yaxt = "n",
+     xlab = "Date", ylab = "", main = "Expanding-window rolling-origin design")
+axis(2, at = 1:4, labels = c(rolling_origin_folds$fold, "Final test"), las = 1)
+for (i in seq_len(nrow(rolling_origin_folds))) {
+  segments(min(development$date), i, rolling_origin_folds$train_end[i], i,
+           col = "#1f6aa5", lwd = 10)
+  segments(rolling_origin_folds$validation_start[i], i,
+           rolling_origin_folds$validation_end[i], i, col = "#e69f00", lwd = 10)
+}
+segments(min(test$date), 4, max(test$date), 4, col = "#d94b36", lwd = 10)
+legend("bottomright", legend = c("Expanding train", "Validation", "Untouched test"),
+       col = c("#1f6aa5", "#e69f00", "#d94b36"), lwd = 7, bty = "n")
+dev.off()
+
+png(file.path(figures_dir, "rolling_origin_model_comparison.png"), width = 1600, height = 1100, res = 180)
+bar_cols <- ifelse(model_selection_rolling_origin$model == selected_model_name, "#1f6aa5", "#a9b6c2")
+upper <- model_selection_rolling_origin$mean_RMSE + model_selection_rolling_origin$sd_RMSE
+bar_pos <- barplot(model_selection_rolling_origin$mean_RMSE,
+                   names.arg = model_selection_rolling_origin$model, col = bar_cols,
+                   las = 1, ylab = "Mean validation RMSE",
+                   main = "Rolling-origin model selection (2021-2023)",
+                   ylim = c(0, max(upper) * 1.16))
+arrows(bar_pos, model_selection_rolling_origin$mean_RMSE - model_selection_rolling_origin$sd_RMSE,
+       bar_pos, upper, angle = 90, code = 3, length = .06)
+text(bar_pos, upper, labels = sprintf("%.4f", model_selection_rolling_origin$mean_RMSE), pos = 3)
 dev.off()
 
 png(file.path(figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
@@ -795,10 +867,10 @@ dev.off()
 png(file.path(figures_dir, "robustness_sensitivity.png"), width = 1900, height = 1600, res = 180)
 par(mfrow = c(2, 2), mar = c(5, 4.4, 3, 1.2))
 functional_labels <- c("Linear", "Quadratic", sprintf("Yeo-Johnson\n(lambda=%.2f)", selected_lambda))
-functional_values <- functional_form_sensitivity$tuning_RMSE_original_scale
+functional_values <- functional_form_sensitivity$rolling_mean_RMSE_original_scale
 functional_pos <- barplot(functional_values, names.arg = functional_labels,
                           col = c("#1f6aa5", "#7aa6c2", "#a9b6c2"),
-                          ylab = "Tuning RMSE", main = "Functional-form comparison (tuning only)",
+                          ylab = "Mean validation RMSE", main = "Functional form: rolling-origin",
                           ylim = c(0, max(functional_values) * 1.18))
 text(functional_pos, functional_values, sprintf("%.4f", functional_values), pos = 3, cex = .8)
 
@@ -828,8 +900,8 @@ text(as.Date(break_date_sensitivity$transition_date), break_date_sensitivity$int
      pos = c(4, 3, 2), offset = .45, cex = .78)
 
 plot(lambda_profile$lambda, lambda_profile$profile_score, type = "l", lwd = 2,
-     col = "#1f6aa5", xlab = "Yeo-Johnson lambda", ylab = "Training profile score",
-     main = "Lambda selected without tuning/test leakage")
+     col = "#1f6aa5", xlab = "Yeo-Johnson lambda", ylab = "Development profile score",
+     main = "Lambda selected without final-test leakage")
 abline(v = selected_lambda, lty = 2, col = "#d94b36", lwd = 2)
 text(selected_lambda, max(lambda_profile$profile_score), sprintf("lambda=%.2f", selected_lambda),
      pos = 4, cex = .8)
@@ -866,16 +938,19 @@ log_lines <- c(
   "HAC(5) coefficients:",
   paste(capture.output(print(coef_hac5, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
-  "Chronological split:",
+  "Development / final-test split:",
   paste(capture.output(print(split_summary, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
-  "Tuning-only model selection:",
-  paste(capture.output(print(tuning_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "Rolling-origin fold metrics:",
+  paste(capture.output(print(rolling_origin_fold_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Rolling-origin model selection:",
+  paste(capture.output(print(model_selection_rolling_origin, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
   "Untouched held-out test:",
   paste(capture.output(print(test_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
-  "Functional-form sensitivity (tuning only; held-out decision not reopened):",
+  "Functional-form sensitivity (rolling-origin; held-out decision not reopened):",
   paste(capture.output(print(functional_form_sensitivity, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
   "Influence sensitivity:",

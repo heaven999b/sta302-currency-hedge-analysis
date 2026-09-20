@@ -11,4 +11,4 @@ CMA,control,numeric,percentage points,Japan daily investment factor,Kenneth Fren
 MOM,control,numeric,percentage points,Japan daily momentum factor,Kenneth French Data Library,Complete cases only
 dlog_VIX,control,numeric,percentage points,100 * log VIX change,FRED VIXCLS,Complete cases only
 rate_diff,control,numeric,percentage points,"U.S. minus Japan immediate/call-money rate; source month shifted to the following calendar month",FRED IRSTCI01USM156N and IRSTCI01JPM156N,Complete cases only
-split,evaluation label,factor,"train, tuning, or test",Fixed chronological 60/20/20 row split,Derived from ordered analysis table,Every row assigned exactly once
+split,evaluation label,factor,"development or test",Development ends 2024-01-23; final test starts 2024-01-24,Derived from ordered analysis table,Every row assigned exactly once

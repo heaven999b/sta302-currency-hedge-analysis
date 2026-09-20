@@ -65,17 +65,17 @@ Figure 2 provides a six-panel preliminary diagnostic grid. Residuals versus fitt
 
 These are preliminary OLS results. In accordance with the Part 1 instruction, we diagnose but do not correct violations here; robust inference and sensitivity analysis are deferred to the final project.
 
-## Plan for the remaining analysis (292 words)
+## Plan for the remaining analysis (299 words)
 
 The focal terms - yen appreciation, `Post`, and their interaction - will remain. We will first fit the full ten-predictor specification and retain it as the pre-specified inferential model. Predictive simplification will compare three hierarchy-respecting candidates: (1) the FX interaction alone; (2) macro controls adding Nikkei return, VIX change, and lagged rate differential; and (3) the full factor model additionally containing SMB, HML, RMW, CMA, and MOM. Controls will not be removed by individual p-values.
 
-After specification changes, we will recheck residual, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Given heteroskedasticity, dependence, heavy tails, and functional-form evidence, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation; a direct logarithm is invalid for signed returns. Transformations will be judged by diagnostics, tuning performance, and interpretability, not significance.
+After specification changes, we will recheck residual, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Given diagnostic violations, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation; a direct logarithm is invalid for signed returns. Transformations will be judged by diagnostics, rolling validation performance, and interpretability, not significance.
 
-The primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and exclusion of confirmed data errors, if any. Classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will vary the pandemic cut within a declared window rather than search all dates.
+Primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and exclusion of confirmed data errors. Classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will vary the pandemic cut within a declared window rather than search all dates.
 
-Prediction remains secondary. A fixed chronological 60/20/20 split will fit the three candidates on the training period and select the lowest tuning RMSE. The locked winner will then be refitted on train plus tuning and evaluated exactly once on the untouched test period against historical-mean and zero-return benchmarks. The full model remains the basis for confirmatory coefficient inference; the reduced winner is the final predictive model. No random cross-validation, test-set tuning, or post-test reselection will be used.
+Prediction remains secondary. Expanding-window rolling-origin validation will fit each candidate through 2020, 2021, and 2022 and score the following calendar year, producing validation results for 2021-2023. Mean RMSE across the three folds will lock the winner. It will then be refitted on all development observations through January 23, 2024 and evaluated exactly once from January 24, 2024 onward against historical-mean and zero-return benchmarks. The full model remains the basis for confirmatory coefficient inference; the reduced winner is the final predictive model. No random splitting, final-test tuning, or post-test reselection will be used.
 
-Frozen data, code, outputs, and selection evidence will be versioned together. Table 3 assigns project milestones; member placeholders will be replaced from the signed agreement.
+Frozen data, code, outputs, and selection evidence will be versioned. Table 3 assigns project milestones; member placeholders will be replaced from the signed agreement.
 
 ## References
 

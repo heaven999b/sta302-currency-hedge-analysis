@@ -1,6 +1,6 @@
 R version: R version 4.4.3 (2025-02-28)
 jsonlite version: 2.0.0
-Run time UTC: 2026-09-20 20:40:50 UTC
+Run time UTC: 2026-09-20 21:11:30 UTC
 Rows: 2655
 Date range: 2014-02-06 to 2026-07-31
 Pre/Post rows: 1304 / 1351
@@ -8,7 +8,7 @@ Full R-squared: 0.703819
 Baseline R-squared: 0.695625
 Durbin-Watson: 2.8280
 Max VIF: 3.560 (HML)
-Selected predictive model: Macro controls
+Selected predictive model: FX interaction
 
 Classical coefficients:
      inference             term      estimate    std_error     t_value
@@ -79,25 +79,49 @@ HAC(5) coefficients:
  -0.0007065467  0.006162008
  -0.1350865590  0.012673719
 
-Chronological split:
-  split rows start_date   end_date                       purpose
-  train 1593 2014-02-06 2021-07-20          fit candidate models
- tuning  531 2021-07-21 2024-01-23                select by RMSE
-   test  531 2024-01-24 2026-07-31 one final held-out evaluation
+Development / final-test split:
+       split rows start_date   end_date
+ development 2124 2014-02-06 2024-01-23
+        test  531 2024-01-24 2026-07-31
+                                  purpose
+ rolling-origin selection and final refit
+            one final held-out evaluation
 
-Tuning-only model selection:
-             model      RMSE       MAE train_start  train_end tuning_start
-    FX interaction 0.3066213 0.2102365  2014-02-06 2021-07-20   2021-07-21
-    Macro controls 0.3061905 0.2118773  2014-02-06 2021-07-20   2021-07-21
- Full factor model 0.3074665 0.2145787  2014-02-06 2021-07-20   2021-07-21
- tuning_end
- 2024-01-23
- 2024-01-23
- 2024-01-23
+Rolling-origin fold metrics:
+             model          fold train_rows train_start  train_end
+    FX interaction Validate 2021       1476  2014-02-06 2020-12-30
+    FX interaction Validate 2022       1687  2014-02-06 2021-12-30
+    FX interaction Validate 2023       1898  2014-02-06 2022-12-30
+    Macro controls Validate 2021       1476  2014-02-06 2020-12-30
+    Macro controls Validate 2022       1687  2014-02-06 2021-12-30
+    Macro controls Validate 2023       1898  2014-02-06 2022-12-30
+ Full factor model Validate 2021       1476  2014-02-06 2020-12-30
+ Full factor model Validate 2022       1687  2014-02-06 2021-12-30
+ Full factor model Validate 2023       1898  2014-02-06 2022-12-30
+ validation_rows validation_start validation_end      RMSE       MAE
+             211       2021-01-05     2021-12-30 0.1808819 0.1396568
+             211       2022-01-05     2022-12-30 0.3125465 0.2278852
+             217       2023-01-05     2023-12-29 0.3065144 0.2043581
+             211       2021-01-05     2021-12-30 0.2003402 0.1514809
+             211       2022-01-05     2022-12-30 0.3182310 0.2314844
+             217       2023-01-05     2023-12-29 0.3039255 0.2022262
+             211       2021-01-05     2021-12-30 0.2043085 0.1547801
+             211       2022-01-05     2022-12-30 0.3210031 0.2342631
+             217       2023-01-05     2023-12-29 0.3038130 0.2040241
+
+Rolling-origin model selection:
+             model folds mean_RMSE    sd_RMSE  mean_MAE     sd_MAE
+    FX interaction     3 0.2666476 0.07433647 0.1906334 0.04568742
+    Macro controls     3 0.2741656 0.06433349 0.1950638 0.04047982
+ Full factor model     3 0.2763749 0.06300036 0.1976891 0.04011838
+ worst_fold_RMSE
+       0.3125465
+       0.3182310
+       0.3210031
 
 Untouched held-out test:
                      model      RMSE       MAE development_end test_start
-  Selected: Macro controls 0.3115880 0.2178062      2024-01-23 2024-01-24
+  Selected: FX interaction 0.3158876 0.2157643      2024-01-23 2024-01-24
  Historical-mean benchmark 0.6531625 0.4608724      2024-01-23 2024-01-24
      Zero-return benchmark 0.6534176 0.4634132      2024-01-23 2024-01-24
    test_end
@@ -105,39 +129,39 @@ Untouched held-out test:
  2026-07-31
  2026-07-31
 
-Functional-form sensitivity (tuning only; held-out decision not reopened):
+Functional-form sensitivity (rolling-origin; held-out decision not reopened):
              specification
    Primary linear response
  Quadratic yen sensitivity
       Yeo-Johnson response
-                                                  response_scale
-                         Original percentage-point return spread
-                         Original percentage-point return spread
- Yeo-Johnson transformed; inverse transformed for tuning metrics
+                                                      response_scale
+                             Original percentage-point return spread
+                             Original percentage-point return spread
+ Yeo-Johnson transformed; inverse transformed for validation metrics
  yeo_johnson_lambda rows parameters adjusted_r_squared
                  NA 2655         12          0.7025861
                  NA 2655         14          0.7051035
-               0.95 2655         12          0.7041155
- tuning_RMSE_original_scale tuning_MAE_original_scale        reset_p
-                  0.3074665                 0.2145787 0.000850604718
-                  0.3111081                 0.2180925 0.000060384818
-                  0.3045090                 0.2140376 0.000000488713
+                  1 2655         12          0.7025861
+ rolling_mean_RMSE_original_scale rolling_mean_MAE_original_scale       reset_p
+                        0.2763749                       0.1976891 0.00085060472
+                        0.2818015                       0.2003592 0.00006038482
+                        0.2753057                       0.1969269 0.00085060472
  breusch_pagan_p
   0.008246984521
   0.000000229308
-  0.002639095343
+  0.008246984521
                                                                                                                           breusch_godfrey_lag5_p
  0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002411044
  0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090207298210
- 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011634130
+ 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002411044
  jarque_bera_p nonlinear_terms_hac5_joint_p
              0                           NA
              0                   0.02880338
              0                           NA
-                                                                                  role
-           Primary: directly interpretable hedge slope; held-out result remains locked
-                        Sensitivity: hierarchy-preserving quadratic terms; tuning only
- Sensitivity: lambda selected on training data; slope loses direct hedge-ratio meaning
+                                                                                    role
+                  Primary: directly interpretable hedge slope; rolling-origin comparison
+                       Sensitivity: hierarchy-preserving quadratic terms; rolling-origin
+ Sensitivity: lambda reselected inside each fold; slope loses direct hedge-ratio meaning
 
 Influence sensitivity:
                         analysis rows r_squared  pre_slope
@@ -176,26 +200,28 @@ Pandemic-break sensitivity:
      1307      1348
 
 Data-quality and reproducibility checks:
-                    check status expected
-           processed_rows   TRUE     2655
-              date_unique   TRUE     TRUE
- date_strictly_increasing   TRUE     TRUE
- complete_analysis_fields   TRUE     TRUE
-    exact_return_interval   TRUE     TRUE
-      train_before_tuning   TRUE     TRUE
-       tuning_before_test   TRUE     TRUE
-  split_rows_cover_sample   TRUE     TRUE
-         stochastic_steps  FALSE    FALSE
+                       check status expected
+              processed_rows   TRUE     2655
+                 date_unique   TRUE     TRUE
+    date_strictly_increasing   TRUE     TRUE
+    complete_analysis_fields   TRUE     TRUE
+       exact_return_interval   TRUE     TRUE
+     development_before_test   TRUE     TRUE
+          rolling_fold_order   TRUE     TRUE
+ rolling_validation_disjoint   TRUE     TRUE
+     split_rows_cover_sample   TRUE     TRUE
+            stochastic_steps  FALSE    FALSE
                                                                                  detail
                                                                               2655 rows
                                                                       2655 unique dates
                                                                2014-02-06 to 2026-07-31
                                                                       Missing values: 0
                               HEWJ/EWJ, FX, Nikkei and VIX return start/end dates agree
-                                                                2021-07-20 < 2021-07-21
                                                                 2024-01-23 < 2024-01-24
+                         Each expanding training window ends before its validation year
+         Validation windows are the non-overlapping calendar years 2021, 2022, and 2023
                                                                 2655 rows assigned once
- OLS, deterministic transformations and fixed chronological splits; seed not applicable
+ OLS, deterministic transformations and fixed rolling-origin folds; seed not applicable
 
 R session information:
 R version 4.4.3 (2025-02-28)
