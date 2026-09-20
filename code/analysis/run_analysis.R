@@ -31,10 +31,22 @@ raw_dir <- if (repo_mode) file.path(project_dir, "data", "raw") else file.path(p
 processed_dir <- if (repo_mode) file.path(project_dir, "data", "processed") else file.path(project_dir, "data", "cleaned")
 results_dir <- file.path(project_dir, "results")
 figures_dir <- file.path(project_dir, "figures")
+inference_results_dir <- file.path(results_dir, "inference")
+prediction_results_dir <- file.path(results_dir, "prediction")
+robustness_results_dir <- file.path(results_dir, "robustness")
+audit_results_dir <- file.path(results_dir, "audit")
+models_results_dir <- file.path(results_dir, "models")
+inference_figures_dir <- file.path(figures_dir, "inference")
+prediction_figures_dir <- file.path(figures_dir, "prediction")
+diagnostics_figures_dir <- file.path(figures_dir, "diagnostics")
 
 dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
+for (directory in c(inference_results_dir, prediction_results_dir,
+                    robustness_results_dir, audit_results_dir, models_results_dir,
+                    inference_figures_dir, prediction_figures_dir,
+                    diagnostics_figures_dir)) {
+  dir.create(directory, recursive = TRUE, showWarnings = FALSE)
+}
 
 read_french_daily <- function(path) {
   d <- read.csv(path, skip = 5, check.names = FALSE, na.strings = c("-99.99", ""))
@@ -721,32 +733,32 @@ predictor_summary <- do.call(rbind, lapply(numeric_predictors, function(v) {
 }))
 
 write.csv(analysis_data, file.path(processed_dir, "sta302_daily_analysis.csv"), row.names = FALSE)
-write.csv(coef_classic, file.path(results_dir, "coefficients_classical.csv"), row.names = FALSE)
-write.csv(coef_hac5, file.path(results_dir, "coefficients_hac5.csv"), row.names = FALSE)
-write.csv(vif_table, file.path(results_dir, "vif.csv"), row.names = FALSE)
-write.csv(hypothesis_tests, file.path(results_dir, "fx_slope_hypothesis_tests.csv"), row.names = FALSE)
-write.csv(diagnostics, file.path(results_dir, "diagnostics.csv"), row.names = FALSE)
-write.csv(predictor_summary, file.path(results_dir, "predictor_summary.csv"), row.names = FALSE)
-write.csv(alignment_audit, file.path(results_dir, "data_alignment_audit.csv"), row.names = FALSE)
-write.csv(alignment_model_sensitivity, file.path(results_dir, "data_alignment_sensitivity.csv"), row.names = FALSE)
-write.csv(hac_sensitivity, file.path(results_dir, "hac_lag_sensitivity.csv"), row.names = FALSE)
-write.csv(split_summary, file.path(results_dir, "split_summary.csv"), row.names = FALSE)
-write.csv(rolling_origin_fold_metrics, file.path(results_dir, "rolling_origin_fold_metrics.csv"),
+write.csv(coef_classic, file.path(inference_results_dir, "coefficients_classical.csv"), row.names = FALSE)
+write.csv(coef_hac5, file.path(inference_results_dir, "coefficients_hac5.csv"), row.names = FALSE)
+write.csv(vif_table, file.path(inference_results_dir, "vif.csv"), row.names = FALSE)
+write.csv(hypothesis_tests, file.path(inference_results_dir, "fx_slope_hypothesis_tests.csv"), row.names = FALSE)
+write.csv(diagnostics, file.path(inference_results_dir, "diagnostics.csv"), row.names = FALSE)
+write.csv(predictor_summary, file.path(inference_results_dir, "predictor_summary.csv"), row.names = FALSE)
+write.csv(alignment_audit, file.path(audit_results_dir, "data_alignment_audit.csv"), row.names = FALSE)
+write.csv(alignment_model_sensitivity, file.path(robustness_results_dir, "data_alignment_sensitivity.csv"), row.names = FALSE)
+write.csv(hac_sensitivity, file.path(robustness_results_dir, "hac_lag_sensitivity.csv"), row.names = FALSE)
+write.csv(split_summary, file.path(prediction_results_dir, "split_summary.csv"), row.names = FALSE)
+write.csv(rolling_origin_fold_metrics, file.path(prediction_results_dir, "rolling_origin_fold_metrics.csv"),
           row.names = FALSE)
-write.csv(model_selection_rolling_origin, file.path(results_dir, "model_selection_rolling_origin.csv"),
+write.csv(model_selection_rolling_origin, file.path(prediction_results_dir, "model_selection_rolling_origin.csv"),
           row.names = FALSE)
-write.csv(test_metrics, file.path(results_dir, "heldout_test_metrics.csv"), row.names = FALSE)
-write.csv(test_predictions, file.path(results_dir, "heldout_test_predictions.csv"), row.names = FALSE)
-write.csv(test_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
-write.csv(functional_form_sensitivity, file.path(results_dir, "functional_form_sensitivity.csv"),
+write.csv(test_metrics, file.path(prediction_results_dir, "heldout_test_metrics.csv"), row.names = FALSE)
+write.csv(test_predictions, file.path(prediction_results_dir, "heldout_test_predictions.csv"), row.names = FALSE)
+write.csv(test_metrics, file.path(prediction_results_dir, "chronological_validation.csv"), row.names = FALSE)
+write.csv(functional_form_sensitivity, file.path(robustness_results_dir, "functional_form_sensitivity.csv"),
           row.names = FALSE)
-write.csv(lambda_profile, file.path(results_dir, "yeo_johnson_lambda_profile.csv"), row.names = FALSE)
-write.csv(yeo_johnson_rolling_folds, file.path(results_dir, "yeo_johnson_rolling_folds.csv"),
+write.csv(lambda_profile, file.path(robustness_results_dir, "yeo_johnson_lambda_profile.csv"), row.names = FALSE)
+write.csv(yeo_johnson_rolling_folds, file.path(robustness_results_dir, "yeo_johnson_rolling_folds.csv"),
           row.names = FALSE)
-write.csv(influence_sensitivity, file.path(results_dir, "influence_sensitivity.csv"), row.names = FALSE)
-write.csv(influence_audit, file.path(results_dir, "influence_audit.csv"), row.names = FALSE)
-write.csv(break_date_sensitivity, file.path(results_dir, "break_date_sensitivity.csv"), row.names = FALSE)
-write.csv(data_quality_audit, file.path(results_dir, "data_quality_audit.csv"), row.names = FALSE)
+write.csv(influence_sensitivity, file.path(robustness_results_dir, "influence_sensitivity.csv"), row.names = FALSE)
+write.csv(influence_audit, file.path(audit_results_dir, "influence_audit.csv"), row.names = FALSE)
+write.csv(break_date_sensitivity, file.path(robustness_results_dir, "break_date_sensitivity.csv"), row.names = FALSE)
+write.csv(data_quality_audit, file.path(audit_results_dir, "data_quality_audit.csv"), row.names = FALSE)
 saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5,
              selected_model_name = selected_model_name, selected_model = selected_model,
              rolling_origin_fold_metrics = rolling_origin_fold_metrics,
@@ -754,9 +766,9 @@ saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vc
              quadratic_model = quadratic_model, yeo_johnson_model = yj_model,
              yeo_johnson_lambda = selected_lambda, winsorized_model = winsorized_model,
              cooks_trimmed_model = cooks_trimmed_model),
-        file.path(results_dir, "models.rds"))
+        file.path(models_results_dir, "models.rds"))
 
-png(file.path(figures_dir, "fx_slope_by_period.png"), width = 1800, height = 1200, res = 180)
+png(file.path(inference_figures_dir, "fx_slope_by_period.png"), width = 1800, height = 1200, res = 180)
 cols <- ifelse(analysis_data$Post == "Pre", rgb(0.12, 0.42, 0.68, 0.22), rgb(0.88, 0.32, 0.23, 0.22))
 plot(analysis_data$JPY_app, analysis_data$Y, pch = 16, cex = 0.55, col = cols,
      xlab = "Daily yen appreciation, JPY_app (%)", ylab = "HEWJ minus EWJ daily log return (%)",
@@ -768,7 +780,7 @@ legend("topright", legend = c("Pre: through 2020-03-10", "Post: from 2020-03-12"
        col = c("#1f6aa5", "#d94b36"), lwd = 3, bty = "n")
 dev.off()
 
-png(file.path(figures_dir, "chronological_split.png"), width = 1800, height = 1100, res = 180)
+png(file.path(prediction_figures_dir, "chronological_split.png"), width = 1800, height = 1100, res = 180)
 split_cols <- c(development = "#1f6aa5", test = "#d94b36")
 plot(analysis_data$date, analysis_data$Y, pch = 16, cex = .35,
      col = adjustcolor(split_cols[as.character(analysis_data$split)], alpha.f = .35),
@@ -778,7 +790,7 @@ abline(v = as.numeric(max(development$date)), lty = 2, col = "grey35")
 legend("topright", legend = names(split_cols), col = split_cols, pch = 16, bty = "n")
 dev.off()
 
-png(file.path(figures_dir, "rolling_origin_folds.png"), width = 1800, height = 1050, res = 180)
+png(file.path(prediction_figures_dir, "rolling_origin_folds.png"), width = 1800, height = 1050, res = 180)
 par(mar = c(5.1, 9.2, 4.1, 2.1))
 plot(as.Date(c("2014-01-01", "2026-08-01")), c(0.5, 4.5), type = "n", yaxt = "n",
      xlab = "Date", ylab = "", main = "Expanding-window rolling-origin design")
@@ -794,7 +806,7 @@ legend("bottomright", legend = c("Expanding train", "Validation", "Untouched tes
        col = c("#1f6aa5", "#e69f00", "#d94b36"), lwd = 7, bty = "n")
 dev.off()
 
-png(file.path(figures_dir, "rolling_origin_model_comparison.png"), width = 1600, height = 1100, res = 180)
+png(file.path(prediction_figures_dir, "rolling_origin_model_comparison.png"), width = 1600, height = 1100, res = 180)
 bar_cols <- ifelse(model_selection_rolling_origin$model == selected_model_name, "#1f6aa5", "#a9b6c2")
 upper <- model_selection_rolling_origin$mean_RMSE + model_selection_rolling_origin$sd_RMSE
 bar_pos <- barplot(model_selection_rolling_origin$mean_RMSE,
@@ -819,7 +831,7 @@ for (model_name in names(candidate_figure_files)) {
   model_rows <- rolling_origin_fold_metrics[
     rolling_origin_fold_metrics$model == model_name, ]
   mean_rmse <- mean(model_rows$RMSE)
-  png(file.path(figures_dir, candidate_figure_files[[model_name]]),
+  png(file.path(prediction_figures_dir, candidate_figure_files[[model_name]]),
       width = 1600, height = 1050, res = 180)
   bar_positions <- barplot(
     model_rows$RMSE, names.arg = sub("Validate ", "", model_rows$fold),
@@ -836,7 +848,7 @@ for (model_name in names(candidate_figure_files)) {
   dev.off()
 }
 
-png(file.path(figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
+png(file.path(prediction_figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
 actual_roll <- trailing_mean(test_predictions$actual)
 pred_roll <- trailing_mean(test_predictions$predicted)
 plot(test_predictions$date, actual_roll, type = "l", lwd = 2, col = "#1f6aa5",
@@ -848,7 +860,7 @@ legend("topright", legend = c("Actual", "Predicted"), col = c("#1f6aa5", "#d94b3
        lwd = 2, bty = "n")
 dev.off()
 
-png(file.path(figures_dir, "hac_lag_sensitivity.png"), width = 1500, height = 1050, res = 180)
+png(file.path(inference_figures_dir, "hac_lag_sensitivity.png"), width = 1500, height = 1050, res = 180)
 plot(hac_sensitivity$lag, hac_sensitivity$interaction_estimate, pch = 19, cex = 1.2,
      ylim = range(c(hac_sensitivity$interaction_conf_low, hac_sensitivity$interaction_conf_high)),
      xlab = "Newey-West lag", ylab = "JPY appreciation x Post estimate",
@@ -859,7 +871,7 @@ abline(h = 0, lty = 2, col = "grey45")
 axis(1, at = hac_sensitivity$lag)
 dev.off()
 
-png(file.path(figures_dir, "residual_diagnostics.png"), width = 1800, height = 2100, res = 180)
+png(file.path(diagnostics_figures_dir, "residual_diagnostics.png"), width = 1800, height = 2100, res = 180)
 par(mfrow = c(3, 2), mar = c(4.2, 4.2, 2.5, 1.2))
 plot(fitted(full_model), resid, pch = 16, cex = .45, col = rgb(0.1, 0.3, 0.6, .3),
      xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs fitted")
@@ -881,7 +893,7 @@ plot(analysis_data$date, cooks, type = "h", col = adjustcolor("#1f6aa5", alpha.f
 abline(h = cooks_threshold, lty = 2, col = "#d94b36", lwd = 2)
 dev.off()
 
-png(file.path(figures_dir, "coefficient_intervals_hac5.png"), width = 1800, height = 1200, res = 180)
+png(file.path(inference_figures_dir, "coefficient_intervals_hac5.png"), width = 1800, height = 1200, res = 180)
 plot_terms <- coef_hac5$term != "(Intercept)"
 tab <- coef_hac5[plot_terms, ]
 ord <- order(tab$estimate)
@@ -895,7 +907,7 @@ axis(2, at = seq_len(nrow(tab)), labels = tab$term, las = 1, cex.axis = .85)
 abline(v = 0, lty = 2, col = "grey45")
 dev.off()
 
-png(file.path(figures_dir, "robustness_sensitivity.png"), width = 1900, height = 1600, res = 180)
+png(file.path(diagnostics_figures_dir, "robustness_sensitivity.png"), width = 1900, height = 1600, res = 180)
 par(mfrow = c(2, 2), mar = c(5, 4.4, 3, 1.2))
 functional_labels <- c("Linear", "Quadratic", sprintf("Yeo-Johnson\n(lambda=%.2f)", selected_lambda))
 functional_values <- functional_form_sensitivity$rolling_mean_RMSE_original_scale
@@ -938,7 +950,7 @@ text(selected_lambda, max(lambda_profile$profile_score), sprintf("lambda=%.2f", 
      pos = 4, cex = .8)
 dev.off()
 
-png(file.path(figures_dir, "influence_diagnostics.png"), width = 1800, height = 1100, res = 180)
+png(file.path(diagnostics_figures_dir, "influence_diagnostics.png"), width = 1800, height = 1100, res = 180)
 plot(analysis_data$date, cooks, type = "h", col = adjustcolor("#1f6aa5", alpha.f = .7),
      xlab = "Date", ylab = "Cook's distance", main = "Influence screening; primary model retains all dates")
 abline(h = cooks_threshold, lty = 2, col = "#d94b36", lwd = 2)
@@ -996,6 +1008,6 @@ log_lines <- c(
   "R session information:",
   paste(capture.output(sessionInfo()), collapse = "\n")
 )
-writeLines(log_lines, file.path(results_dir, "R_run_log.txt"))
+writeLines(log_lines, file.path(audit_results_dir, "R_run_log.txt"))
 
 cat(paste(log_lines[1:11], collapse = "\n"), "\n")

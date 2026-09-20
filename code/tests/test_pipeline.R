@@ -4,7 +4,9 @@ args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", args, value = TRUE)
 root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg[1])), "..", ".."), mustWork = TRUE)
 
-read_result <- function(name) read.csv(file.path(root, "results", name), check.names = FALSE)
+read_result <- function(group, name) {
+  read.csv(file.path(root, "results", group, name), check.names = FALSE)
+}
 require_true <- function(condition, message) if (!isTRUE(condition)) stop(message, call. = FALSE)
 
 data <- read.csv(file.path(root, "data", "processed", "sta302_daily_analysis.csv"))
@@ -14,18 +16,18 @@ require_true(!anyDuplicated(data$date), "Duplicate analysis dates")
 require_true(all(diff(data$date) > 0), "Dates are not strictly increasing")
 require_true(identical(unique(data$split), c("development", "test")), "Split order changed")
 
-splits <- read_result("split_summary.csv")
+splits <- read_result("prediction", "split_summary.csv")
 require_true(sum(splits$rows) == nrow(data), "Split rows do not cover the sample")
 require_true(as.Date(splits$end_date[1]) < as.Date(splits$start_date[2]), "Development/test overlap")
 require_true(as.Date(splits$start_date[2]) == as.Date("2024-01-24"), "Final-test cutoff changed")
 
-alignment <- read_result("data_alignment_audit.csv")
+alignment <- read_result("audit", "data_alignment_audit.csv")
 require_true(all(alignment$final_joint_interval_rows == nrow(data)), "Alignment sample mismatch")
 require_true(all(alignment$exact_interval_start_matches_Y >= nrow(data)), "Invalid interval audit")
 
-rolling <- read_result("model_selection_rolling_origin.csv")
-folds <- read_result("rolling_origin_fold_metrics.csv")
-test <- read_result("heldout_test_metrics.csv")
+rolling <- read_result("prediction", "model_selection_rolling_origin.csv")
+folds <- read_result("prediction", "rolling_origin_fold_metrics.csv")
+test <- read_result("prediction", "heldout_test_metrics.csv")
 selected <- sub("^Selected: ", "", test$model[1])
 require_true(selected == rolling$model[which.min(rolling$mean_RMSE)],
              "Test model was not selected on rolling-origin mean RMSE")
@@ -36,50 +38,50 @@ require_true(identical(sort(unique(as.character(folds$validation_start))),
              "Rolling-origin validation windows changed")
 require_true(test$RMSE[1] < min(test$RMSE[-1]), "Selected model does not beat test benchmarks")
 
-hac <- read_result("coefficients_hac5.csv")
+hac <- read_result("inference", "coefficients_hac5.csv")
 interaction <- hac[hac$term == "JPY_app:PostPost", ]
 require_true(nrow(interaction) == 1L && interaction$p_value > 0.05,
              "Primary HAC interaction conclusion changed")
-slopes <- read_result("fx_slope_hypothesis_tests.csv")
+slopes <- read_result("inference", "fx_slope_hypothesis_tests.csv")
 slopes <- slopes[slopes$inference == "Newey-West HAC(5)", ]
 require_true(nrow(slopes) == 2L && all(slopes$p_value < 0.05),
              "Incomplete-hedging conclusion changed")
 
-functional <- read_result("functional_form_sensitivity.csv")
+functional <- read_result("robustness", "functional_form_sensitivity.csv")
 require_true(nrow(functional) == 3L, "Functional-form sensitivity is incomplete")
 require_true(all(c("Primary linear response", "Quadratic yen sensitivity", "Yeo-Johnson response") %in%
                    functional$specification), "Functional-form specifications changed")
-lambda_profile <- read_result("yeo_johnson_lambda_profile.csv")
+lambda_profile <- read_result("robustness", "yeo_johnson_lambda_profile.csv")
 require_true(sum(as.logical(lambda_profile$selected)) == 1L, "Yeo-Johnson lambda was not selected uniquely")
 
-influence <- read_result("influence_sensitivity.csv")
+influence <- read_result("robustness", "influence_sensitivity.csv")
 require_true(nrow(influence) == 3L, "Influence sensitivity is incomplete")
 require_true(influence$interaction_hac5_p[1] > 0.05 && any(influence$interaction_hac5_p[-1] < 0.05),
              "Influence sensitivity no longer documents inferential fragility")
-influence_audit <- read_result("influence_audit.csv")
+influence_audit <- read_result("audit", "influence_audit.csv")
 require_true(sum(as.logical(influence_audit$flagged)) == 134L, "Cook's-distance audit changed")
 
-breaks <- read_result("break_date_sensitivity.csv")
+breaks <- read_result("robustness", "break_date_sensitivity.csv")
 require_true(nrow(breaks) == 3L, "Break-date sensitivity is incomplete")
 require_true(any(breaks$interaction_hac5_p < 0.05) && any(breaks$interaction_hac5_p > 0.05),
              "Break-date sensitivity no longer documents cutoff dependence")
 
-quality <- read_result("data_quality_audit.csv")
+quality <- read_result("audit", "data_quality_audit.csv")
 expected_status <- quality$expected == "TRUE" | quality$expected == "2655"
 require_true(all(as.logical(quality$status) == expected_status), "Data-quality audit contains a failed check")
 
 csv_manifest <- read.csv(file.path(root, "data", "original_csv", "SHA256SUMS.csv"))
 require_true(nrow(csv_manifest) == 7L, "Original-source CSV export is incomplete")
 
-required_figures <- c("chronological_split.png", "fx_slope_by_period.png",
-                      "coefficient_intervals_hac5.png", "hac_lag_sensitivity.png",
-                      "rolling_origin_folds.png", "rolling_origin_model_comparison.png",
-                      "model_fx_interaction_rolling_rmse.png",
-                      "model_macro_controls_rolling_rmse.png",
-                      "model_full_factor_rolling_rmse.png",
-                      "heldout_test_predictions.png",
-                      "residual_diagnostics.png", "robustness_sensitivity.png",
-                      "influence_diagnostics.png")
+required_figures <- c("prediction/chronological_split.png", "inference/fx_slope_by_period.png",
+                      "inference/coefficient_intervals_hac5.png", "inference/hac_lag_sensitivity.png",
+                      "prediction/rolling_origin_folds.png", "prediction/rolling_origin_model_comparison.png",
+                      "prediction/model_fx_interaction_rolling_rmse.png",
+                      "prediction/model_macro_controls_rolling_rmse.png",
+                      "prediction/model_full_factor_rolling_rmse.png",
+                      "prediction/heldout_test_predictions.png",
+                      "diagnostics/residual_diagnostics.png", "diagnostics/robustness_sensitivity.png",
+                      "diagnostics/influence_diagnostics.png")
 for (figure in required_figures) {
   target <- file.path(root, "figures", figure)
   require_true(file.exists(target) && file.info(target)$size > 1000, paste("Missing figure", figure))

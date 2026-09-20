@@ -60,45 +60,45 @@ The held-out exercise measures conditional fit using same-day observed predictor
 
 ## Visual results / 结果可视化
 
-![Chronological split](figures/chronological_split.png)
+![Chronological split](figures/prediction/chronological_split.png)
 
-![Rolling-origin folds](figures/rolling_origin_folds.png)
+![Rolling-origin folds](figures/prediction/rolling_origin_folds.png)
 
-![FX slope by period](figures/fx_slope_by_period.png)
+![FX slope by period](figures/inference/fx_slope_by_period.png)
 
-![HAC lag sensitivity](figures/hac_lag_sensitivity.png)
+![HAC lag sensitivity](figures/inference/hac_lag_sensitivity.png)
 
-![Rolling-origin comparison](figures/rolling_origin_model_comparison.png)
+![Rolling-origin comparison](figures/prediction/rolling_origin_model_comparison.png)
 
 ### Candidate-specific validation figures / 各候选模型独立验证图
 
-The three candidates are also saved as separate files in `figures/`, using the
+The three candidates are also saved as separate files in `figures/prediction/`, using the
 same vertical scale and showing every validation-year RMSE plus the three-fold
 mean. This separates the initial full model from the two reduced alternatives
 while preserving a directly comparable presentation.
 
-三个候选模型同时以独立文件保存在 `figures/` 中，纵轴范围一致；每张图均展示三个
+三个候选模型同时以独立文件保存在 `figures/prediction/` 中，纵轴范围一致；每张图均展示三个
 验证年度的 RMSE 和三折平均值，因此可以分别检查初始完整模型和两个精简模型。
 
 **FX interaction / 汇率交互模型（最终选中）**
 
-![FX interaction rolling validation](figures/model_fx_interaction_rolling_rmse.png)
+![FX interaction rolling validation](figures/prediction/model_fx_interaction_rolling_rmse.png)
 
 **Macro controls / 宏观控制模型**
 
-![Macro controls rolling validation](figures/model_macro_controls_rolling_rmse.png)
+![Macro controls rolling validation](figures/prediction/model_macro_controls_rolling_rmse.png)
 
 **Full factor model / 初始完整因子模型**
 
-![Full factor rolling validation](figures/model_full_factor_rolling_rmse.png)
+![Full factor rolling validation](figures/prediction/model_full_factor_rolling_rmse.png)
 
-![Held-out predictions](figures/heldout_test_predictions.png)
+![Held-out predictions](figures/prediction/heldout_test_predictions.png)
 
-![Residual diagnostics](figures/residual_diagnostics.png)
+![Residual diagnostics](figures/diagnostics/residual_diagnostics.png)
 
-![Robustness sensitivity](figures/robustness_sensitivity.png)
+![Robustness sensitivity](figures/diagnostics/robustness_sensitivity.png)
 
-![Influence diagnostics](figures/influence_diagnostics.png)
+![Influence diagnostics](figures/diagnostics/influence_diagnostics.png)
 
 ## Repository architecture / 仓库架构
 
@@ -117,16 +117,27 @@ while preserving a directly comparable presentation.
 │   ├── SOURCE_MANIFEST.csv             # machine-readable source provenance
 │   └── processed/                      # cleaned modeling table
 ├── results/                            # machine-readable experiment results
-│   └── README.md                       # result-file index and interpretation
+│   ├── inference/                      # coefficients, tests and diagnostics
+│   ├── prediction/                     # rolling selection and final test
+│   ├── robustness/                     # sensitivity analyses
+│   ├── audit/                          # quality checks, logs and hashes
+│   ├── models/                         # fitted R objects
+│   └── README.md                       # exact result-file index
 ├── figures/                            # generated visual evidence
-│   └── README.md                       # figure index by research stage
+│   ├── inference/                      # slope and coefficient figures
+│   ├── prediction/                     # split, validation and test figures
+│   ├── diagnostics/                    # residual and sensitivity figures
+│   └── README.md                       # exact figure-file index
 ├── reports/                            # human-readable reports and PDFs
 │   ├── README.md                       # report index
 │   ├── analysis/                       # final findings and rendered HTML
 │   ├── proposal/                       # proposal sources and three PDFs
 │   └── submission/                     # submission instructions
-├── config/analysis_protocol.yml        # frozen split and inference protocol
+├── config/
+│   ├── README.md                       # how the protocol is used
+│   └── analysis_protocol.yml           # frozen split and inference protocol
 ├── submission/                         # Quercus-ready staging package
+│   ├── README.md                       # package map and handling rules
 │   ├── code/                           # standalone Rmd
 │   ├── data/original/                  # all source data as CSV
 │   ├── data/cleaned/                   # cleaned modeling CSV
@@ -174,14 +185,13 @@ This command:
 - `reports/analysis/STA302_Project_Analysis.html` - verified knitted analysis.
 - `data/processed/sta302_daily_analysis.csv` - final complete-case modeling table.
 - `submission/` - staged PDF, standalone Rmd, original CSV exports/copies, cleaned CSV, checklist, and hashes.
-- `results/R_run_log.txt` - R version, package versions, sample and results.
+- `results/audit/R_run_log.txt` - R version, package versions, sample and results.
 - `reports/analysis/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
-- `results/rolling_origin_fold_metrics.csv`, `results/model_selection_rolling_origin.csv`, and `results/heldout_test_metrics.csv` - rolling validation and untouched-test evidence.
-- `results/data_alignment_audit.csv` and `results/data_alignment_sensitivity.csv` - date-interval audit and robustness result.
-- `results/functional_form_sensitivity.csv` - quadratic and Yeo-Johnson checks without reopening test selection.
-- `results/influence_audit.csv` and `results/influence_sensitivity.csv` - row-level influence audit and declared stress tests.
-- `results/break_date_sensitivity.csv` - fixed-window cutoff sensitivity.
-- `results/data_quality_audit.csv` and `results/ARTIFACT_MANIFEST.csv` - machine-readable reproducibility evidence.
+- `results/prediction/` - rolling validation, locked selection, untouched-test metrics and predictions.
+- `results/inference/` - classical and HAC coefficients, hypothesis tests and model diagnostics.
+- `results/robustness/` - alignment, functional-form, HAC-lag, influence and break-date sensitivity.
+- `results/audit/` - row-level audits, run log, data-quality checks and artifact hashes.
+- `results/models/models.rds` - fitted models and locked selection metadata.
 
 The proposal PDFs remain the Part 1 proposal and therefore describe the
 robustness work as planned. Completed final-project evidence is reported in the

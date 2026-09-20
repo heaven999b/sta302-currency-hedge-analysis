@@ -42,7 +42,7 @@ bash code/pipeline/run_all.sh
 5. Runs R assertions for dates, row counts, split isolation, model-selection lock, conclusions, and figures.
 6. Rebuilds the standalone R Markdown HTML and the three proposal PDFs.
 7. Runs the standalone CSV-only R Markdown in an isolated temporary directory.
-8. Hashes all core inputs, code, results, figures, and rendered outputs in `results/ARTIFACT_MANIFEST.csv`.
+8. Hashes all core inputs, code, results, figures, and rendered outputs in `results/audit/ARTIFACT_MANIFEST.csv`.
 9. Runs independent Python validation of the expected numerical and documentary outputs.
 
 ## Leakage and randomness / 数据泄漏与随机性
@@ -61,14 +61,14 @@ bash code/pipeline/run_all.sh
 | Can the raw bytes be verified? | `data/raw/SHA256SUMS.txt` |
 | Can every source be opened as CSV? | `data/original_csv/` and its `SHA256SUMS.csv` |
 | What does each processed field mean? | `data/DATA_DICTIONARY.csv` |
-| Are dates, missingness, intervals, and splits valid? | `results/data_quality_audit.csv` |
-| Was model selection time-respecting? | `results/rolling_origin_fold_metrics.csv` and `results/model_selection_rolling_origin.csv` |
-| Are conclusions robust to HAC lag? | `results/hac_lag_sensitivity.csv` |
-| Do nonlinear forms help? | `results/functional_form_sensitivity.csv` |
-| Are influential observations driving the result? | `results/influence_audit.csv` and `results/influence_sensitivity.csv` |
-| Does the COVID cutoff matter? | `results/break_date_sensitivity.csv` |
-| Can every artifact be tied to a hash? | `results/ARTIFACT_MANIFEST.csv` |
-| What software actually ran? | `results/R_run_log.txt` |
+| Are dates, missingness, intervals, and splits valid? | `results/audit/data_quality_audit.csv` |
+| Was model selection time-respecting? | `results/prediction/rolling_origin_fold_metrics.csv` and `results/prediction/model_selection_rolling_origin.csv` |
+| Are conclusions robust to HAC lag? | `results/robustness/hac_lag_sensitivity.csv` |
+| Do nonlinear forms help? | `results/robustness/functional_form_sensitivity.csv` |
+| Are influential observations driving the result? | `results/audit/influence_audit.csv` and `results/robustness/influence_sensitivity.csv` |
+| Does the COVID cutoff matter? | `results/robustness/break_date_sensitivity.csv` |
+| Can every artifact be tied to a hash? | `results/audit/ARTIFACT_MANIFEST.csv` |
+| What software actually ran? | `results/audit/R_run_log.txt` |
 
 ## Interpretation boundary / 解释边界
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "results" / "ARTIFACT_MANIFEST.csv"
+OUTPUT = ROOT / "results" / "audit" / "ARTIFACT_MANIFEST.csv"
 
 
 def sha256(path: Path) -> str:

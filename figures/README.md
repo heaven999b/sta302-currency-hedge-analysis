@@ -1,28 +1,36 @@
 # Figures / 图表
 
-All files in this directory are generated visual evidence. The generating code
-is `code/analysis/run_analysis.R` except for Chinese proposal variants produced
-by the PDF builder.
+本目录只保存自动生成的可视化证据。主要绘图代码在
+`code/analysis/run_analysis.R`；中文 proposal 图由 PDF 构建脚本生成。
 
-本目录只保存图表；主要生成代码位于 `code/analysis/run_analysis.R`。
+```text
+figures/
+├── inference/      # 系数、斜率和 HAC 推断图
+├── prediction/     # 切分、rolling-origin、候选模型和最终测试图
+├── diagnostics/    # 残差、影响点和综合稳健性图
+└── README.md
+```
 
-## Study design and model selection / 研究设计与选模
+## `inference/`：解释主模型
 
-- `chronological_split.png`: development versus untouched final test.
-- `rolling_origin_folds.png`: three expanding training windows and validation years.
-- `rolling_origin_model_comparison.png`: combined comparison of all three candidates.
-- `model_fx_interaction_rolling_rmse.png`: selected FX-interaction model only.
-- `model_macro_controls_rolling_rmse.png`: macro-control candidate only.
-- `model_full_factor_rolling_rmse.png`: initial full-factor model only.
-- `heldout_test_predictions.png`: selected-model performance on the final test.
+- `fx_slope_by_period.png`：疫情前后日元斜率。
+- `coefficient_intervals_hac5.png`：完整模型 HAC(5) 系数区间。
+- `hac_lag_sensitivity.png`：不同 HAC lag 下的交互项。
+- `fx_slope_by_period_zh.png`：中文 proposal 使用的对应图。
 
-## Inference and diagnostics / 推断与诊断
+## `prediction/`：展示严格预测流程
 
-- `fx_slope_by_period.png`: yen slope before and after the pandemic break.
-- `coefficient_intervals_hac5.png`: full-model HAC(5) coefficient intervals.
-- `residual_diagnostics.png`: six-panel assumption and influence diagnostics.
-- `hac_lag_sensitivity.png`: interaction estimate under alternative HAC lags.
-- `robustness_sensitivity.png`: functional-form, influence and break-date checks.
-- `influence_diagnostics.png`: Cook-distance screening over time.
+- `chronological_split.png`：development 与 untouched final test。
+- `rolling_origin_folds.png`：三个扩展训练窗口与验证年度。
+- `rolling_origin_model_comparison.png`：三个候选模型总比较。
+- `model_fx_interaction_rolling_rmse.png`：最终选中的汇率交互模型。
+- `model_macro_controls_rolling_rmse.png`：宏观控制模型。
+- `model_full_factor_rolling_rmse.png`：初始完整因子模型。
+- `heldout_test_predictions.png`：锁定模型的最终测试表现。
 
-Files ending in `_zh.png` are Chinese-labelled versions used in the Chinese PDF.
+## `diagnostics/`：检查模型风险
+
+- `residual_diagnostics.png`：六联图检查残差与影响点。
+- `robustness_sensitivity.png`：函数形式、影响点、断点和变换参数。
+- `influence_diagnostics.png`：Cook 距离随时间的筛查。
+- `residual_diagnostics_zh.png`：中文 proposal 使用的诊断图。

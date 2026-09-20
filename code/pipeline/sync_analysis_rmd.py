@@ -169,19 +169,19 @@ can be audited without confusing their roles.
 
 ```{{r generated-figures, echo=FALSE, out.width="95%", fig.align="center"}}
 figure_files <- file.path(figures_dir, c(
-  "chronological_split.png",
-  "rolling_origin_folds.png",
-  "fx_slope_by_period.png",
-  "coefficient_intervals_hac5.png",
-  "hac_lag_sensitivity.png",
-  "rolling_origin_model_comparison.png",
-  "model_fx_interaction_rolling_rmse.png",
-  "model_macro_controls_rolling_rmse.png",
-  "model_full_factor_rolling_rmse.png",
-  "heldout_test_predictions.png",
-  "residual_diagnostics.png",
-  "robustness_sensitivity.png",
-  "influence_diagnostics.png"
+  "prediction/chronological_split.png",
+  "prediction/rolling_origin_folds.png",
+  "inference/fx_slope_by_period.png",
+  "inference/coefficient_intervals_hac5.png",
+  "inference/hac_lag_sensitivity.png",
+  "prediction/rolling_origin_model_comparison.png",
+  "prediction/model_fx_interaction_rolling_rmse.png",
+  "prediction/model_macro_controls_rolling_rmse.png",
+  "prediction/model_full_factor_rolling_rmse.png",
+  "prediction/heldout_test_predictions.png",
+  "diagnostics/residual_diagnostics.png",
+  "diagnostics/robustness_sensitivity.png",
+  "diagnostics/influence_diagnostics.png"
 ))
 knitr::include_graphics(figure_files)
 ```

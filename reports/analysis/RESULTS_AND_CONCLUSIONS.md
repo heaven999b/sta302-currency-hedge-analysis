@@ -109,7 +109,7 @@ the test set had already been locked.
 
 The primary model retains all 2,655 valid observations. There are 134 dates with
 Cook's distance above `4/n`; every date and diagnostic is recorded in
-`results/influence_audit.csv`. No observation was classified as a confirmed
+`results/audit/influence_audit.csv`. No observation was classified as a confirmed
 source error by the automated hash and interval checks.
 
 The focal interaction is not significant in the primary HAC(5) model

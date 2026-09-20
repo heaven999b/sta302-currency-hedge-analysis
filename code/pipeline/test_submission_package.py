@@ -33,8 +33,8 @@ def main() -> None:
         required = [
             package / "code" / "isolated_submission_test.html",
             package / "data" / "cleaned" / "sta302_daily_analysis.csv",
-            package / "results" / "heldout_test_metrics.csv",
-            package / "figures" / "chronological_split.png",
+            package / "results" / "prediction" / "heldout_test_metrics.csv",
+            package / "figures" / "prediction" / "chronological_split.png",
         ]
         for target in required:
             if not target.is_file() or target.stat().st_size < 100:

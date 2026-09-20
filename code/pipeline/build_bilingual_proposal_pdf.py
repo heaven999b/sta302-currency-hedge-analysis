@@ -35,10 +35,10 @@ ZH_SOURCE = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_ZH.md"
 OUTPUT_EN = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf"
 OUTPUT_BILINGUAL = ROOT / "reports" / "proposal" / "STA302_Bilingual_Research_Proposal.pdf"
 OUTPUT_ZH = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_ZH.pdf"
-SCATTER = ROOT / "figures" / "fx_slope_by_period.png"
-DIAGNOSTICS = ROOT / "figures" / "residual_diagnostics.png"
-SCATTER_ZH = ROOT / "figures" / "fx_slope_by_period_zh.png"
-DIAGNOSTICS_ZH = ROOT / "figures" / "residual_diagnostics_zh.png"
+SCATTER = ROOT / "figures" / "inference" / "fx_slope_by_period.png"
+DIAGNOSTICS = ROOT / "figures" / "diagnostics" / "residual_diagnostics.png"
+SCATTER_ZH = ROOT / "figures" / "inference" / "fx_slope_by_period_zh.png"
+DIAGNOSTICS_ZH = ROOT / "figures" / "diagnostics" / "residual_diagnostics_zh.png"
 ZH_FONT_PATH = Path("/System/Library/Fonts/STHeiti Medium.ttc")
 ZH_FONT = "STHeiti-Embedded"
 
@@ -166,7 +166,7 @@ def build_chinese_figures() -> None:
     rows = read_csv(ROOT / "data" / "processed" / "sta302_daily_analysis.csv")
     coefficients = {
         row["term"]: float(row["estimate"])
-        for row in read_csv(ROOT / "results" / "coefficients_classical.csv")
+        for row in read_csv(ROOT / "results" / "inference" / "coefficients_classical.csv")
     }
     SCATTER_ZH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -219,7 +219,7 @@ def build_chinese_figures() -> None:
         residuals.append(float(row["Y"]) - pred)
 
     influence_by_date = {
-        row["date"]: row for row in read_csv(ROOT / "results" / "influence_audit.csv")
+        row["date"]: row for row in read_csv(ROOT / "results" / "audit" / "influence_audit.csv")
     }
     standardized = [float(influence_by_date[row["date"]]["standardized_residual"]) for row in rows]
     cooks = [float(influence_by_date[row["date"]]["cooks_distance"]) for row in rows]
@@ -441,8 +441,8 @@ def contribution_table(styles, chinese=False):
 
 
 def variable_summary_table(styles, chinese=False):
-    summary = {row["variable"]: row for row in read_csv(ROOT / "results" / "predictor_summary.csv")}
-    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "diagnostics.csv")}
+    summary = {row["variable"]: row for row in read_csv(ROOT / "results" / "inference" / "predictor_summary.csv")}
+    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "inference" / "diagnostics.csv")}
     labels = {
         "Y": ("Response spread", "Extreme days; heavy tails"),
         "JPY_app": ("Yen appreciation", "Wide daily extremes"),
@@ -498,7 +498,7 @@ def variable_summary_table(styles, chinese=False):
 
 
 def coefficient_table(styles, chinese=False):
-    rows = read_csv(ROOT / "results" / "coefficients_classical.csv")
+    rows = read_csv(ROOT / "results" / "inference" / "coefficients_classical.csv")
     term_labels = {
         "(Intercept)": "Intercept", "JPY_app": "Yen appreciation", "PostPost": "Post indicator",
         "Nikkei_ret": "Nikkei return", "SMB": "SMB", "HML": "HML", "RMW": "RMW", "CMA": "CMA",
@@ -551,7 +551,7 @@ def schedule_table(styles, chinese=False):
 
 
 def cover(styles, bilingual=False, chinese_only=False):
-    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "diagnostics.csv")}
+    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "inference" / "diagnostics.csv")}
     data_line = (f"{int(diagnostics['observations']):,} daily observations | "
                  f"{diagnostics['start_date']} to {diagnostics['end_date']}")
     if chinese_only:

@@ -56,7 +56,7 @@ def validate_analysis() -> None:
     require(data[0]["date"] == "2014-02-06", f"Unexpected first date: {data[0]['date']}")
     require(data[-1]["date"] == "2026-07-31", f"Unexpected last date: {data[-1]['date']}")
 
-    coefficients = read_rows(ROOT / "results" / "coefficients_hac5.csv")
+    coefficients = read_rows(ROOT / "results" / "inference" / "coefficients_hac5.csv")
     by_term = {row["term"]: row for row in coefficients}
     require(abs(float(by_term["JPY_app"]["estimate"]) - (-0.850936443698603)) < 1e-6,
             "JPY_app estimate changed")
@@ -65,29 +65,29 @@ def validate_analysis() -> None:
     require(abs(float(by_term["JPY_app:PostPost"]["p_value"]) - 0.104391107292676) < 1e-6,
             "interaction HAC p-value changed")
 
-    diagnostics = {row["metric"]: row["value"] for row in read_rows(ROOT / "results" / "diagnostics.csv")}
+    diagnostics = {row["metric"]: row["value"] for row in read_rows(ROOT / "results" / "inference" / "diagnostics.csv")}
     require(abs(float(diagnostics["r_squared_full"]) - 0.703818792797337) < 1e-6,
             "full-model R-squared changed")
     require(float(diagnostics["max_vif"]) < 5, "maximum VIF is unexpectedly high")
 
-    splits = read_rows(ROOT / "results" / "split_summary.csv")
+    splits = read_rows(ROOT / "results" / "prediction" / "split_summary.csv")
     require([row["split"] for row in splits] == ["development", "test"],
             "Chronological split order changed")
     require(sum(int(row["rows"]) for row in splits) == len(data), "Split rows do not cover data")
     require(splits[1]["start_date"] == "2024-01-24", "Final-test cutoff changed")
 
-    rolling = read_rows(ROOT / "results" / "model_selection_rolling_origin.csv")
-    folds = read_rows(ROOT / "results" / "rolling_origin_fold_metrics.csv")
+    rolling = read_rows(ROOT / "results" / "prediction" / "model_selection_rolling_origin.csv")
+    folds = read_rows(ROOT / "results" / "prediction" / "rolling_origin_fold_metrics.csv")
     require(len(folds) == 9 and len({row["fold"] for row in folds}) == 3,
             "Rolling-origin fold results are incomplete")
     selected = min(rolling, key=lambda row: float(row["mean_RMSE"]))["model"]
-    test = read_rows(ROOT / "results" / "heldout_test_metrics.csv")
+    test = read_rows(ROOT / "results" / "prediction" / "heldout_test_metrics.csv")
     require(test[0]["model"] == f"Selected: {selected}",
             "Held-out model was not locked on rolling-origin validation")
     require(float(test[0]["RMSE"]) < min(float(row["RMSE"]) for row in test[1:]),
             "Selected model does not beat held-out benchmarks")
 
-    functional = read_rows(ROOT / "results" / "functional_form_sensitivity.csv")
+    functional = read_rows(ROOT / "results" / "robustness" / "functional_form_sensitivity.csv")
     require(len(functional) == 3, "Functional-form sensitivity must contain three specifications")
     by_spec = {row["specification"]: row for row in functional}
     require(-2 <= float(by_spec["Yeo-Johnson response"]["yeo_johnson_lambda"]) <= 2,
@@ -97,23 +97,23 @@ def validate_analysis() -> None:
     require(all(float(row["rolling_mean_RMSE_original_scale"]) > 0 for row in functional),
             "Rolling functional-form metrics are invalid")
 
-    influence = read_rows(ROOT / "results" / "influence_sensitivity.csv")
+    influence = read_rows(ROOT / "results" / "robustness" / "influence_sensitivity.csv")
     require(len(influence) == 3, "Influence sensitivity must contain three analyses")
     influence_p = [float(row["interaction_hac5_p"]) for row in influence]
     require(influence_p[0] > 0.05 and min(influence_p[1:]) < 0.05,
             "Influence fragility conclusion changed")
-    audit = read_rows(ROOT / "results" / "influence_audit.csv")
+    audit = read_rows(ROOT / "results" / "audit" / "influence_audit.csv")
     require(sum(row["flagged"].upper() == "TRUE" for row in audit) == 134,
             "Cook's-distance flagged count changed")
 
-    breaks = read_rows(ROOT / "results" / "break_date_sensitivity.csv")
+    breaks = read_rows(ROOT / "results" / "robustness" / "break_date_sensitivity.csv")
     require([row["transition_date"] for row in breaks] ==
             ["2020-03-06", "2020-03-11", "2020-03-16"],
             "Declared break-date window changed")
     break_p = [float(row["interaction_hac5_p"]) for row in breaks]
     require(min(break_p) < 0.05 < max(break_p), "Break-date sensitivity no longer crosses 5%")
 
-    quality = read_rows(ROOT / "results" / "data_quality_audit.csv")
+    quality = read_rows(ROOT / "results" / "audit" / "data_quality_audit.csv")
     for row in quality:
         require(row["status"].upper() == row["expected"].upper() or
                 (row["check"] == "processed_rows" and row["status"].upper() == "TRUE" and
@@ -126,21 +126,21 @@ def validate_artifacts() -> None:
         ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf",
         ROOT / "reports" / "proposal" / "STA302_Bilingual_Research_Proposal.pdf",
         ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_ZH.pdf",
-        ROOT / "figures" / "fx_slope_by_period.png",
-        ROOT / "figures" / "residual_diagnostics.png",
-        ROOT / "figures" / "coefficient_intervals_hac5.png",
-        ROOT / "figures" / "chronological_split.png",
-        ROOT / "figures" / "rolling_origin_folds.png",
-        ROOT / "figures" / "rolling_origin_model_comparison.png",
-        ROOT / "figures" / "model_fx_interaction_rolling_rmse.png",
-        ROOT / "figures" / "model_macro_controls_rolling_rmse.png",
-        ROOT / "figures" / "model_full_factor_rolling_rmse.png",
-        ROOT / "figures" / "heldout_test_predictions.png",
-        ROOT / "figures" / "hac_lag_sensitivity.png",
-        ROOT / "figures" / "robustness_sensitivity.png",
-        ROOT / "figures" / "influence_diagnostics.png",
-        ROOT / "results" / "R_run_log.txt",
-        ROOT / "results" / "ARTIFACT_MANIFEST.csv",
+        ROOT / "figures" / "inference" / "fx_slope_by_period.png",
+        ROOT / "figures" / "diagnostics" / "residual_diagnostics.png",
+        ROOT / "figures" / "inference" / "coefficient_intervals_hac5.png",
+        ROOT / "figures" / "prediction" / "chronological_split.png",
+        ROOT / "figures" / "prediction" / "rolling_origin_folds.png",
+        ROOT / "figures" / "prediction" / "rolling_origin_model_comparison.png",
+        ROOT / "figures" / "prediction" / "model_fx_interaction_rolling_rmse.png",
+        ROOT / "figures" / "prediction" / "model_macro_controls_rolling_rmse.png",
+        ROOT / "figures" / "prediction" / "model_full_factor_rolling_rmse.png",
+        ROOT / "figures" / "prediction" / "heldout_test_predictions.png",
+        ROOT / "figures" / "inference" / "hac_lag_sensitivity.png",
+        ROOT / "figures" / "diagnostics" / "robustness_sensitivity.png",
+        ROOT / "figures" / "diagnostics" / "influence_diagnostics.png",
+        ROOT / "results" / "audit" / "R_run_log.txt",
+        ROOT / "results" / "audit" / "ARTIFACT_MANIFEST.csv",
     ]
     for target in required:
         require(target.is_file() and target.stat().st_size > 1000, f"Missing or empty artifact: {target}")
@@ -175,18 +175,18 @@ def validate_artifacts() -> None:
         for phrase in ["完整中文提案", "摘要", "研究背景与问题", "三个遵守层级原则的候选模型", "数据与产品文档", "残差诊断", "提交前仍需确认"]:
             require(phrase in chinese_text, f"Expected Chinese PDF text not found: {phrase}")
 
-    manifest_rows = read_rows(ROOT / "results" / "ARTIFACT_MANIFEST.csv")
+    manifest_rows = read_rows(ROOT / "results" / "audit" / "ARTIFACT_MANIFEST.csv")
     require(len(manifest_rows) >= 45, "Core artifact manifest is unexpectedly incomplete")
     manifest_paths = {row["relative_path"] for row in manifest_rows}
     for required_path in [
         "code/analysis/run_analysis.R",
         "config/analysis_protocol.yml",
         "data/processed/sta302_daily_analysis.csv",
-        "results/functional_form_sensitivity.csv",
-        "results/rolling_origin_fold_metrics.csv",
-        "results/model_selection_rolling_origin.csv",
-        "results/influence_sensitivity.csv",
-        "results/break_date_sensitivity.csv",
+        "results/robustness/functional_form_sensitivity.csv",
+        "results/prediction/rolling_origin_fold_metrics.csv",
+        "results/prediction/model_selection_rolling_origin.csv",
+        "results/robustness/influence_sensitivity.csv",
+        "results/robustness/break_date_sensitivity.csv",
         "reports/analysis/STA302_Project_Analysis.html",
     ]:
         require(required_path in manifest_paths, f"Artifact manifest omits {required_path}")
