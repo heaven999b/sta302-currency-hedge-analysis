@@ -1,0 +1,13 @@
+name: sta302-daily-project
+channels:
+  - conda-forge
+dependencies:
+  - r-base=4.4
+  - r-jsonlite
+  - r-knitr
+  - r-rmarkdown
+  - pandoc
+  - python=3.12
+  - reportlab
+  - pillow
+  - poppler

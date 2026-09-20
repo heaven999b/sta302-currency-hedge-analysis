@@ -1,0 +1,11 @@
+.DS_Store
+.RData
+.Rhistory
+.Rproj.user/
+.r_env/
+renv/library/
+tmp/
+__pycache__/
+*.pyc
+*.zip
+*_files/

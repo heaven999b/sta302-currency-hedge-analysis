@@ -1,0 +1,318 @@
+options(stringsAsFactors = FALSE, scipen = 999)
+
+suppressPackageStartupMessages(library(jsonlite))
+
+locate_project_dir <- function() {
+  file_args <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+  script_candidate <- if (length(file_args)) {
+    file.path(dirname(normalizePath(sub("^--file=", "", file_args[1]), mustWork = FALSE)), "..")
+  } else {
+    NA_character_
+  }
+  candidates <- unique(c(script_candidate, getwd(), file.path(getwd(), "..")))
+  candidates <- candidates[!is.na(candidates)]
+  for (candidate in candidates) {
+    if (file.exists(file.path(candidate, "data", "raw", "Yahoo_HEWJ_chart.json"))) {
+      return(normalizePath(candidate, mustWork = TRUE))
+    }
+  }
+  stop("Could not locate the repository root containing data/raw.")
+}
+
+project_dir <- locate_project_dir()
+raw_dir <- file.path(project_dir, "data", "raw")
+processed_dir <- file.path(project_dir, "data", "processed")
+results_dir <- file.path(project_dir, "results")
+figures_dir <- file.path(project_dir, "figures")
+
+dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
+
+read_french_daily <- function(path) {
+  d <- read.csv(path, skip = 5, check.names = FALSE, na.strings = c("-99.99", ""))
+  names(d)[1] <- "date"
+  d$date <- as.Date(trimws(as.character(d$date)), format = "%Y%m%d")
+  d <- d[!is.na(d$date), , drop = FALSE]
+  for (j in seq.int(2, ncol(d))) d[[j]] <- as.numeric(d[[j]])
+  d
+}
+
+read_yahoo_adjusted <- function(path, value_name) {
+  payload <- jsonlite::fromJSON(path)
+  result <- payload$chart$result
+  timestamps <- result$timestamp[[1]]
+  adjusted <- result$indicators$adjclose[[1]]$adjclose[[1]]
+  stopifnot(length(timestamps) == length(adjusted))
+  out <- data.frame(
+    date = as.Date(as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")),
+    value = as.numeric(adjusted)
+  )
+  names(out)[2] <- value_name
+  out[!is.na(out[[value_name]]), , drop = FALSE]
+}
+
+month_floor <- function(x) as.Date(format(x, "%Y-%m-01"))
+next_month <- function(x) as.Date(format(month_floor(x) + 32, "%Y-%m-01"))
+
+newey_west <- function(model, lag = 5) {
+  X <- model.matrix(model)
+  u <- residuals(model)
+  n <- nrow(X)
+  inv_xx <- solve(crossprod(X))
+  xu <- X * as.numeric(u)
+  meat <- crossprod(xu)
+  if (lag > 0) {
+    for (ell in seq_len(lag)) {
+      weight <- 1 - ell / (lag + 1)
+      gamma <- crossprod(xu[(ell + 1):n, , drop = FALSE], xu[1:(n - ell), , drop = FALSE])
+      meat <- meat + weight * (gamma + t(gamma))
+    }
+  }
+  inv_xx %*% meat %*% inv_xx
+}
+
+coefficient_table <- function(model, vcov_matrix = vcov(model), label = "Classical OLS") {
+  b <- coef(model)
+  se <- sqrt(diag(vcov_matrix))
+  df <- df.residual(model)
+  t_value <- b / se
+  p_value <- 2 * pt(abs(t_value), df = df, lower.tail = FALSE)
+  crit <- qt(0.975, df = df)
+  data.frame(
+    inference = label,
+    term = names(b),
+    estimate = as.numeric(b),
+    std_error = as.numeric(se),
+    t_value = as.numeric(t_value),
+    p_value = as.numeric(p_value),
+    conf_low = as.numeric(b - crit * se),
+    conf_high = as.numeric(b + crit * se),
+    row.names = NULL
+  )
+}
+
+linear_test <- function(model, weights, null = 0, vcov_matrix = vcov(model), label = "Classical OLS") {
+  b <- coef(model)
+  a <- rep(0, length(b)); names(a) <- names(b)
+  if (!all(names(weights) %in% names(b))) {
+    stop("Unknown coefficient(s) in linear test: ",
+         paste(setdiff(names(weights), names(b)), collapse = ", "))
+  }
+  a[names(weights)] <- weights
+  estimate <- sum(a * b)
+  se <- sqrt(drop(t(a) %*% vcov_matrix %*% a))
+  t_value <- (estimate - null) / se
+  p_value <- 2 * pt(abs(t_value), df = df.residual(model), lower.tail = FALSE)
+  data.frame(inference = label, estimate = estimate, std_error = se,
+             null = null, t_value = t_value, p_value = p_value)
+}
+
+manual_vif <- function(model) {
+  X <- model.matrix(model)[, -1, drop = FALSE]
+  vals <- vapply(seq_len(ncol(X)), function(j) {
+    fit <- lm(X[, j] ~ X[, -j, drop = FALSE])
+    1 / (1 - summary(fit)$r.squared)
+  }, numeric(1))
+  data.frame(term = colnames(X), vif = vals, row.names = NULL)
+}
+
+ff5 <- read_french_daily(file.path(raw_dir, "Japan_5_Factors_Daily.csv"))
+mom <- read_french_daily(file.path(raw_dir, "Japan_MOM_Factor_Daily.csv"))
+names(mom)[names(mom) == "WML"] <- "MOM"
+hewj <- read_yahoo_adjusted(file.path(raw_dir, "Yahoo_HEWJ_chart.json"), "HEWJ")
+ewj <- read_yahoo_adjusted(file.path(raw_dir, "Yahoo_EWJ_chart.json"), "EWJ")
+
+fx <- read.csv(file.path(raw_dir, "FRED_DEXJPUS_daily.csv"), na.strings = c("", "."))
+names(fx)[1] <- "date"; fx$date <- as.Date(fx$date)
+market <- read.csv(file.path(raw_dir, "FRED_NIKKEI225_VIXCLS_daily.csv"), na.strings = c("", "."))
+names(market)[1] <- "date"; market$date <- as.Date(market$date)
+rates <- read.csv(file.path(raw_dir, "FRED_US_Japan_rates_monthly.csv"), na.strings = c("", "."))
+names(rates)[1] <- "month"; rates$month <- as.Date(rates$month)
+rates$rate_diff <- rates$IRSTCI01USM156N - rates$IRSTCI01JPM156N
+rates$rate_month <- next_month(rates$month)
+rates <- rates[, c("rate_month", "rate_diff")]
+
+merged <- merge(hewj, ewj, by = "date")
+for (frame in list(fx, market, ff5, mom)) merged <- merge(merged, frame, by = "date")
+merged$rate_month <- month_floor(merged$date)
+merged <- merge(merged, rates, by = "rate_month", all.x = TRUE)
+merged <- merged[order(merged$date), ]
+
+merged$Y <- c(NA_real_, 100 * diff(log(merged$HEWJ)) - 100 * diff(log(merged$EWJ)))
+merged$JPY_app <- c(NA_real_, -100 * diff(log(merged$DEXJPUS)))
+merged$Nikkei_ret <- c(NA_real_, 100 * diff(log(merged$NIKKEI225)))
+merged$dlog_VIX <- c(NA_real_, 100 * diff(log(merged$VIXCLS)))
+merged$Post <- factor(ifelse(merged$date >= as.Date("2020-03-12"), "Post", "Pre"),
+                      levels = c("Pre", "Post"))
+merged <- merged[merged$date != as.Date("2020-03-11"), ]
+
+analysis_columns <- c("date", "Y", "JPY_app", "Post", "Nikkei_ret", "SMB", "HML",
+                      "RMW", "CMA", "MOM", "dlog_VIX", "rate_diff")
+analysis_data <- merged[complete.cases(merged[, analysis_columns]), analysis_columns]
+analysis_data <- analysis_data[order(analysis_data$date), ]
+stopifnot(nrow(analysis_data) >= 1000L)
+stopifnot(nlevels(analysis_data$Post) == 2L)
+
+full_formula <- Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff
+baseline_formula <- Y ~ JPY_app * Post
+full_model <- lm(full_formula, data = analysis_data)
+baseline_model <- lm(baseline_formula, data = analysis_data)
+
+vcov_hac5 <- newey_west(full_model, lag = 5)
+coef_classic <- coefficient_table(full_model)
+coef_hac5 <- coefficient_table(full_model, vcov_hac5, "Newey-West HAC(5)")
+vif_table <- manual_vif(full_model)
+
+interaction_name <- "JPY_app:PostPost"
+pre_slope_classic <- linear_test(full_model, c(JPY_app = 1), null = -1)
+pre_slope_classic$period <- "Pre-pandemic"; pre_slope_classic$hypothesis <- "FX slope = -1"
+post_slope_classic <- linear_test(
+  full_model,
+  setNames(c(1, 1), c("JPY_app", interaction_name)),
+  null = -1
+)
+post_slope_classic$period <- "Post-pandemic"; post_slope_classic$hypothesis <- "FX slope = -1"
+pre_slope_hac <- linear_test(full_model, c(JPY_app = 1), null = -1, vcov_matrix = vcov_hac5,
+                             label = "Newey-West HAC(5)")
+pre_slope_hac$period <- "Pre-pandemic"; pre_slope_hac$hypothesis <- "FX slope = -1"
+post_slope_hac <- linear_test(full_model, setNames(c(1, 1), c("JPY_app", interaction_name)), null = -1,
+                              vcov_matrix = vcov_hac5, label = "Newey-West HAC(5)")
+post_slope_hac$period <- "Post-pandemic"; post_slope_hac$hypothesis <- "FX slope = -1"
+hypothesis_tests <- rbind(pre_slope_classic, post_slope_classic, pre_slope_hac, post_slope_hac)
+
+resid <- residuals(full_model)
+X <- model.matrix(full_model)
+n <- nrow(X); k <- ncol(X)
+dw <- sum(diff(resid)^2) / sum(resid^2)
+aux_bp <- lm(I(resid^2) ~ X[, -1, drop = FALSE])
+bp_stat <- n * summary(aux_bp)$r.squared
+bp_df <- k - 1
+bp_p <- pchisq(bp_stat, df = bp_df, lower.tail = FALSE)
+lag_order <- 5L
+bg_frame <- data.frame(e = resid[(lag_order + 1):n], X[(lag_order + 1):n, -1, drop = FALSE])
+for (ell in seq_len(lag_order)) bg_frame[[paste0("lag", ell)]] <- resid[(lag_order + 1 - ell):(n - ell)]
+bg_model <- lm(e ~ ., data = bg_frame)
+bg_stat <- nrow(bg_frame) * summary(bg_model)$r.squared
+bg_p <- pchisq(bg_stat, df = lag_order, lower.tail = FALSE)
+jb_stat <- n / 6 * (mean((resid - mean(resid))^3) / sd(resid)^3)^2 +
+  n / 24 * (mean((resid - mean(resid))^4) / sd(resid)^4 - 3)^2
+jb_p <- pchisq(jb_stat, df = 2, lower.tail = FALSE)
+reset_model <- update(full_model, . ~ . + I(fitted(full_model)^2) + I(fitted(full_model)^3))
+reset_anova <- anova(full_model, reset_model)
+cooks <- cooks.distance(full_model)
+
+split_index <- floor(0.80 * nrow(analysis_data))
+train <- analysis_data[seq_len(split_index), ]
+test <- analysis_data[(split_index + 1):nrow(analysis_data), ]
+train_model <- lm(full_formula, data = train)
+test_prediction <- predict(train_model, newdata = test)
+naive_prediction <- rep(mean(train$Y), nrow(test))
+validation_metrics <- data.frame(
+  model = c("Full regression", "Historical-mean benchmark"),
+  RMSE = c(sqrt(mean((test$Y - test_prediction)^2)), sqrt(mean((test$Y - naive_prediction)^2))),
+  MAE = c(mean(abs(test$Y - test_prediction)), mean(abs(test$Y - naive_prediction))),
+  train_end = max(train$date), test_start = min(test$date), test_end = max(test$date)
+)
+
+diagnostics <- data.frame(
+  metric = c("observations", "start_date", "end_date", "pre_observations", "post_observations",
+             "r_squared_full", "adjusted_r_squared_full", "r_squared_baseline", "residual_sigma",
+             "durbin_watson", "breusch_pagan_stat", "breusch_pagan_df", "breusch_pagan_p",
+             "breusch_godfrey_lag5_stat", "breusch_godfrey_lag5_p", "jarque_bera_stat",
+             "jarque_bera_p", "reset_f", "reset_p", "max_vif", "max_vif_term",
+             "max_cooks_distance", "cooks_over_4_over_n"),
+  value = c(nrow(analysis_data), as.character(min(analysis_data$date)), as.character(max(analysis_data$date)),
+            sum(analysis_data$Post == "Pre"), sum(analysis_data$Post == "Post"),
+            summary(full_model)$r.squared, summary(full_model)$adj.r.squared,
+            summary(baseline_model)$r.squared, summary(full_model)$sigma, dw,
+            bp_stat, bp_df, bp_p, bg_stat, bg_p, jb_stat, jb_p,
+            reset_anova$F[2], reset_anova$`Pr(>F)`[2], max(vif_table$vif),
+            vif_table$term[which.max(vif_table$vif)], max(cooks), sum(cooks > 4 / n))
+)
+
+numeric_predictors <- c("Y", "JPY_app", "Nikkei_ret", "SMB", "HML", "RMW", "CMA", "MOM", "dlog_VIX", "rate_diff")
+predictor_summary <- do.call(rbind, lapply(numeric_predictors, function(v) {
+  x <- analysis_data[[v]]
+  data.frame(variable = v, mean = mean(x), sd = sd(x), min = min(x),
+             q25 = unname(quantile(x, .25)), median = median(x),
+             q75 = unname(quantile(x, .75)), max = max(x))
+}))
+
+write.csv(analysis_data, file.path(processed_dir, "sta302_daily_analysis.csv"), row.names = FALSE)
+write.csv(coef_classic, file.path(results_dir, "coefficients_classical.csv"), row.names = FALSE)
+write.csv(coef_hac5, file.path(results_dir, "coefficients_hac5.csv"), row.names = FALSE)
+write.csv(vif_table, file.path(results_dir, "vif.csv"), row.names = FALSE)
+write.csv(hypothesis_tests, file.path(results_dir, "fx_slope_hypothesis_tests.csv"), row.names = FALSE)
+write.csv(diagnostics, file.path(results_dir, "diagnostics.csv"), row.names = FALSE)
+write.csv(predictor_summary, file.path(results_dir, "predictor_summary.csv"), row.names = FALSE)
+write.csv(validation_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
+saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5),
+        file.path(results_dir, "models.rds"))
+
+png(file.path(figures_dir, "fx_slope_by_period.png"), width = 1800, height = 1200, res = 180)
+cols <- ifelse(analysis_data$Post == "Pre", rgb(0.12, 0.42, 0.68, 0.22), rgb(0.88, 0.32, 0.23, 0.22))
+plot(analysis_data$JPY_app, analysis_data$Y, pch = 16, cex = 0.55, col = cols,
+     xlab = "Daily yen appreciation, JPY_app (%)", ylab = "HEWJ minus EWJ daily log return (%)",
+     main = "Currency-hedged equity spread and yen appreciation")
+abline(a = coef(full_model)["(Intercept)"], b = coef(full_model)["JPY_app"], col = "#1f6aa5", lwd = 3)
+abline(a = coef(full_model)["(Intercept)"] + coef(full_model)["PostPost"],
+       b = coef(full_model)["JPY_app"] + coef(full_model)[interaction_name], col = "#d94b36", lwd = 3)
+legend("topright", legend = c("Pre: through 2020-03-10", "Post: from 2020-03-12"),
+       col = c("#1f6aa5", "#d94b36"), lwd = 3, bty = "n")
+dev.off()
+
+png(file.path(figures_dir, "residual_diagnostics.png"), width = 1800, height = 1600, res = 180)
+par(mfrow = c(2, 2), mar = c(4.2, 4.2, 2.5, 1.2))
+plot(fitted(full_model), resid, pch = 16, cex = .45, col = rgb(0.1, 0.3, 0.6, .3),
+     xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs fitted")
+abline(h = 0, lty = 2, col = "grey40")
+qqnorm(resid, pch = 16, cex = .42, col = rgb(0.1, 0.3, 0.6, .35), main = "Normal Q-Q")
+qqline(resid, col = "#d94b36", lwd = 2)
+plot(analysis_data$date, resid, type = "l", col = "#1f6aa5", xlab = "Date", ylab = "Residual",
+     main = "Residuals over time")
+abline(h = 0, lty = 2, col = "grey40")
+acf(resid, lag.max = 30, main = "Residual autocorrelation")
+dev.off()
+
+png(file.path(figures_dir, "coefficient_intervals_hac5.png"), width = 1800, height = 1200, res = 180)
+plot_terms <- coef_hac5$term != "(Intercept)"
+tab <- coef_hac5[plot_terms, ]
+ord <- order(tab$estimate)
+tab <- tab[ord, ]
+par(mar = c(5, 10, 3, 1))
+plot(tab$estimate, seq_len(nrow(tab)), xlim = range(c(tab$conf_low, tab$conf_high)),
+     yaxt = "n", pch = 19, col = "#1f6aa5", xlab = "Coefficient with 95% HAC(5) interval",
+     ylab = "", main = "Full-model estimates")
+segments(tab$conf_low, seq_len(nrow(tab)), tab$conf_high, seq_len(nrow(tab)), col = "#1f6aa5", lwd = 2)
+axis(2, at = seq_len(nrow(tab)), labels = tab$term, las = 1, cex.axis = .85)
+abline(v = 0, lty = 2, col = "grey45")
+dev.off()
+
+log_lines <- c(
+  paste("R version:", R.version.string),
+  paste("jsonlite version:", as.character(packageVersion("jsonlite"))),
+  paste("Run time UTC:", format(Sys.time(), tz = "UTC", usetz = TRUE)),
+  paste("Rows:", nrow(analysis_data)),
+  paste("Date range:", min(analysis_data$date), "to", max(analysis_data$date)),
+  paste("Pre/Post rows:", sum(analysis_data$Post == "Pre"), "/", sum(analysis_data$Post == "Post")),
+  sprintf("Full R-squared: %.6f", summary(full_model)$r.squared),
+  sprintf("Baseline R-squared: %.6f", summary(baseline_model)$r.squared),
+  sprintf("Durbin-Watson: %.4f", dw),
+  sprintf("Max VIF: %.3f (%s)", max(vif_table$vif), vif_table$term[which.max(vif_table$vif)]),
+  "",
+  "Classical coefficients:",
+  paste(capture.output(print(coef_classic, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "HAC(5) coefficients:",
+  paste(capture.output(print(coef_hac5, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Chronological validation:",
+  paste(capture.output(print(validation_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "R session information:",
+  paste(capture.output(sessionInfo()), collapse = "\n")
+)
+writeLines(log_lines, file.path(results_dir, "R_run_log.txt"))
+
+cat(paste(log_lines[1:10], collapse = "\n"), "\n")

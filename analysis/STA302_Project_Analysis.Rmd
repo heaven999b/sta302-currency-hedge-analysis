@@ -1,0 +1,41 @@
+---
+title: "STA302 Final Project: Reproducible Daily Analysis"
+author: "Haiwen Yi and group members"
+date: "2026-09-20"
+output: html_document
+---
+
+## Purpose
+
+This file is the submission entry point for the complete daily HEWJ–EWJ analysis. It executes the accompanying R script, which reads only the frozen files in `data/raw`, writes the cleaned analysis table, fits the declared models, computes classical and Newey–West HAC(5) inference, performs diagnostics and chronological validation, and regenerates all figures and result tables.
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = normalizePath(file.path(getwd(), "..")))
+```
+
+## Reproduce all results
+
+```{r run-all, echo=TRUE, message=TRUE, warning=TRUE}
+# Knit from this repository. The script requires only R (>=4.4) and jsonlite.
+source("analysis/run_analysis.R")
+```
+
+## Inspect primary results
+
+```{r primary-results, echo=TRUE}
+read.csv("results/coefficients_classical.csv")
+read.csv("results/coefficients_hac5.csv")
+read.csv("results/diagnostics.csv")
+read.csv("results/chronological_validation.csv")
+```
+
+## Figures
+
+```{r figures, echo=TRUE, out.width='100%'}
+project_root <- normalizePath(".")
+knitr::include_graphics(c(
+  file.path(project_root, "figures", "fx_slope_by_period.png"),
+  file.path(project_root, "figures", "residual_diagnostics.png"),
+  file.path(project_root, "figures", "coefficient_intervals_hac5.png")
+))
+```
