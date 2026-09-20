@@ -39,11 +39,19 @@ The pandemic interaction is significant with conventional OLS standard errors bu
 ├── results/                            # coefficients, diagnostics, validation, RDS
 ├── scripts/
 │   ├── build_bilingual_proposal_pdf.py
+│   ├── prepare_submission_package.py
 │   ├── run_all.sh
 │   └── validate_outputs.py
 ├── output/
 │   ├── STA302_Project_Analysis.html
-│   └── pdf/STA302_Bilingual_Research_Proposal.pdf
+│   └── pdf/
+│       ├── STA302_Research_Proposal_Official_EN.pdf
+│       └── STA302_Bilingual_Research_Proposal.pdf
+├── submission/                         # Quercus-ready staging package
+│   ├── code/                           # standalone Rmd
+│   ├── data/original/                  # all source data as CSV
+│   ├── data/cleaned/                   # cleaned modeling CSV
+│   └── proposal/                       # official English PDF
 ├── SOURCE_MANIFEST.md
 ├── DATA_USE.md
 └── environment.yml
@@ -69,17 +77,20 @@ This command:
 1. verifies all seven frozen raw-file SHA-256 hashes;
 2. reruns cleaning, OLS, HAC(5), diagnostics, figures, and chronological validation in R;
 3. knits the Rmd to a self-contained HTML file;
-4. rebuilds the bilingual proposal PDF; and
-5. checks the expected rows, dates, coefficients, outputs, and PDF text.
+4. rebuilds the official English and bilingual proposal PDFs;
+5. prepares an all-CSV Quercus staging package; and
+6. checks the expected rows, dates, coefficients, outputs, Rmd completeness, and PDF text.
 
 该命令会验证七份原始文件、重新运行完整 R 分析、渲染 Rmd、重建中英双语 PDF，并检查关键数值和输出是否一致。
 
 ## Primary deliverables / 主要交付物
 
-- `output/pdf/STA302_Bilingual_Research_Proposal.pdf` - English official proposal followed by a faithful Chinese translation.
-- `analysis/STA302_Project_Analysis.Rmd` - reproducible course submission entry.
+- `output/pdf/STA302_Research_Proposal_Official_EN.pdf` - formal English-only course submission.
+- `output/pdf/STA302_Bilingual_Research_Proposal.pdf` - English proposal followed by a faithful Chinese study copy.
+- `analysis/STA302_Project_Analysis.Rmd` - self-contained course submission containing the full cleaning, modeling, table, and diagnostic code.
 - `output/STA302_Project_Analysis.html` - verified knitted analysis.
 - `data/processed/sta302_daily_analysis.csv` - final complete-case modeling table.
+- `submission/` - staged PDF, standalone Rmd, original CSV exports/copies, cleaned CSV, checklist, and hashes.
 - `results/R_run_log.txt` - R version, package versions, sample and results.
 
 ## Data and integrity / 数据与诚信
@@ -91,9 +102,9 @@ The repository contains frozen third-party data snapshots for private educationa
 ## Manual items before course submission / 课程提交前必须人工补充
 
 1. Replace bracketed group-member names and contribution descriptions.
-2. Make the separate contribution-agreement PDF consistent with the proposal.
-3. Add the OneDrive links required by Quercus.
+2. Complete and sign the course-provided Group Teamwork Agreement PDF using the same roster and roles.
+3. Upload `submission/data/original/` and `submission/data/cleaned/` to UofT OneDrive, verify the required access setting, and paste the link into the Quercus submission comment.
 
 1. 替换所有带方括号的小组成员姓名和贡献说明。
-2. 确保单独的小组贡献协议 PDF 与提案一致。
-3. 添加 Quercus 要求的 OneDrive 链接。
+2. 使用相同名单与职责完成并签署课程提供的 Group Teamwork Agreement PDF。
+3. 把 `submission/data/original/` 和 `submission/data/cleaned/` 上传至 UofT OneDrive，核验权限后把链接粘贴到 Quercus 提交评论。

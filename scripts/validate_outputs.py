@@ -59,6 +59,7 @@ def validate_analysis() -> None:
 def validate_artifacts() -> None:
     required = [
         ROOT / "output" / "STA302_Project_Analysis.html",
+        ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf",
         ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf",
         ROOT / "figures" / "fx_slope_by_period.png",
         ROOT / "figures" / "residual_diagnostics.png",
@@ -68,17 +69,46 @@ def validate_artifacts() -> None:
     for target in required:
         require(target.is_file() and target.stat().st_size > 1000, f"Missing or empty artifact: {target}")
 
-    pdf = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
+    official_pdf = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf"
+    bilingual_pdf = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
     if shutil.which("pdftotext"):
-        text = subprocess.check_output(["pdftotext", str(pdf), "-"], text=True)
+        text = subprocess.check_output(["pdftotext", str(official_pdf), "-"], text=True)
         for phrase in [
-            "Part I - English proposal",
-            "第二部分",
-            "Introduction (341 words)",
-            "研究背景与问题",
-            "0.0683",
+            "Official English proposal",
+            "Introduction (388 words)",
+            "Table 1. Numerical summary",
+            "Table 2. Complete preliminary OLS coefficient table",
+            "Table 3. Proposed team schedule",
+            "diagnose but do not correct violations",
         ]:
-            require(phrase in text, f"Expected PDF text not found: {phrase}")
+            require(phrase in text, f"Expected official PDF text not found: {phrase}")
+        require("第二部分" not in text, "Official English PDF unexpectedly contains the Chinese section")
+
+        bilingual_text = subprocess.check_output(["pdftotext", str(bilingual_pdf), "-"], text=True)
+        for phrase in ["Official English proposal", "第二部分", "研究背景与问题", "提交前仍需确认"]:
+            require(phrase in bilingual_text, f"Expected bilingual PDF text not found: {phrase}")
+
+
+def validate_submission() -> None:
+    package = ROOT / "submission"
+    required = [
+        package / "proposal" / "STA302_Research_Proposal_Official_EN.pdf",
+        package / "code" / "STA302_Project_Analysis.Rmd",
+        package / "data" / "cleaned" / "sta302_daily_analysis.csv",
+        package / "data" / "original" / "Yahoo_HEWJ_original_export.csv",
+        package / "data" / "original" / "Yahoo_EWJ_original_export.csv",
+        package / "SHA256SUMS.csv",
+    ]
+    for target in required:
+        require(target.is_file() and target.stat().st_size > 100, f"Missing submission file: {target}")
+    for target in (package / "data").rglob("*"):
+        if target.is_file():
+            require(target.suffix.lower() == ".csv", f"Submission data file is not CSV: {target}")
+
+    rmd = (package / "code" / "STA302_Project_Analysis.Rmd").read_text(encoding="utf-8")
+    require('source("analysis/run_analysis.R")' not in rmd, "Submission Rmd still sources an external R script")
+    for phrase in ["read_yahoo_adjusted <- function", "full_formula <-", "residual_diagnostics.png"]:
+        require(phrase in rmd, f"Standalone Rmd is missing analysis code: {phrase}")
 
 
 def main() -> None:
@@ -88,7 +118,8 @@ def main() -> None:
         return
     validate_analysis()
     validate_artifacts()
-    print("VALIDATION PASSED: raw hashes, analysis results, and bilingual artifacts are consistent.")
+    validate_submission()
+    print("VALIDATION PASSED: raw hashes, analysis results, both proposal PDFs, standalone Rmd, and CSV submission package are consistent.")
 
 
 if __name__ == "__main__":

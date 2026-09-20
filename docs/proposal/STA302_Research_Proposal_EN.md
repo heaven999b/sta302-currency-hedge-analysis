@@ -11,59 +11,67 @@
 | Member | Proposed contribution |
 |---|---|
 | Haiwen Yi | Research design, data construction, R analysis, diagnostics, and first draft |
-| [Member 2] | [Specify literature, validation, writing, or presentation tasks] |
-| [Member 3] | [Specify literature, validation, writing, or presentation tasks] |
-| [Member 4, if applicable] | [Specify contribution] |
+| [Member 2] | Literature verification, interpretation, and written revision |
+| [Member 3] | Reproducibility check, poster development, and presentation recording |
+| [Member 4, if applicable] | Final-model sensitivity analysis and presentation review |
 
-The names and contribution descriptions above must match the separately submitted group agreement.
+The names and contribution descriptions above must match the separately submitted Group Teamwork Agreement.
 
-## Introduction (341 words)
+## Introduction (388 words)
 
-International equity investors face two return sources: the local equity market and the exchange rate that converts foreign assets into the investor's home currency. Currency-hedged exchange-traded funds attempt to remove the second component, but the hedge may be incomplete because contracts are rolled periodically, trading calendars differ, expenses and implementation costs exist, and the portfolio is not rebalanced continuously. This project asks: **How strongly does daily yen appreciation explain the return difference between the currency-hedged iShares MSCI Japan ETF (HEWJ) and its unhedged counterpart (EWJ), and did that relationship change after the World Health Organization characterized COVID-19 as a pandemic?**
+International equity investors receive returns from the local equity market and from the exchange rate used to translate foreign assets into their home currency. Currency-hedged exchange-traded funds attempt to remove the second component, but hedging may be incomplete because forward contracts are rolled periodically, trading calendars differ, expenses and implementation costs exist, and portfolios are not rebalanced continuously. This project asks: **How strongly does daily yen appreciation explain the return difference between the currency-hedged iShares MSCI Japan ETF (HEWJ) and its unhedged counterpart (EWJ), after controlling for equity, factor, volatility, and interest-rate conditions, and did that relationship change after the World Health Organization characterized COVID-19 as a pandemic?**
 
-The response is the daily log-return spread, (Y_t=100[\Delta\log(HEWJ_t)-\Delta\log(EWJ_t)]). The focal predictor is (JPYapp_t=-100\Delta\log(DEXJPUS_t)), so a positive value denotes yen appreciation against the U.S. dollar. If the hedge fully removed contemporaneous currency exposure and both funds otherwise tracked the same Japanese equity portfolio, the expected slope would be near -1: yen appreciation should benefit the unhedged fund relative to the hedged fund. We estimate separate pre- and post-pandemic slopes through a categorical period indicator and its interaction with yen appreciation. March 11, 2020, the transition date, is omitted; the post period begins March 12.
+The response is the daily log-return spread, \(Y_t=100[\Delta\log(HEWJ_t)-\Delta\log(EWJ_t)]\). The focal predictor is \(JPYapp_t=-100\Delta\log(DEXJPUS_t)\), so a positive value denotes yen appreciation against the U.S. dollar. A difference in means or a simple correlation cannot simultaneously adjust for market conditions, estimate conditional period-specific slopes, and test whether the slope changed. Multiple linear regression can do all three through coefficients, confidence intervals, and an interaction test. Under a complete contemporaneous hedge, the yen slope should be near -1. We estimate pre- and post-pandemic slopes with a categorical period indicator and its interaction with yen appreciation. March 11, 2020, is treated as the transition date and omitted.
 
-The design is motivated by four peer-reviewed studies. Hau and Rey (2006) connect exchange rates, equity returns, and portfolio rebalancing, supporting joint attention to currency and equity movements. Campbell, Serfaty-de Medeiros, and Viceira (2010) show that optimal currency hedging varies with the investor and asset environment, so a mechanical one-for-one relation need not hold. Fama and French (2015) motivate controls for size, value, profitability, and investment factors. Shank and Vianna (2016) document dynamic links between exchange-rate movements and trading in U.S.-listed currency-hedged ETFs. Our contribution is narrower and transparent: a reproducible daily matched-pair analysis of one hedged/unhedged Japan ETF pair, with an explicit structural-break interaction, market-risk controls, and time-series-robust inference. The pandemic indicator is descriptive rather than a causal treatment because many policies and market conditions changed simultaneously.
+Four peer-reviewed studies motivate the specification. In international equity and currency data, Hau and Rey (2006) find exchange rates, equity returns, and portfolio flows move jointly, motivating equity-market controls. Using international asset-return data, Campbell, Serfaty-de Medeiros, and Viceira (2010) show that optimal currency hedges vary across investors and assets, so a mechanical one-for-one hedge need not hold. Across diversified U.S. stock portfolios, Fama and French (2015) show that size, value, profitability, and investment factors explain average-return variation, supporting factor controls. For U.S.-listed currency-hedged ETFs, Shank and Vianna (2016) find dynamic links between exchange rates and investor trading. Our contribution is a reproducible daily matched-pair analysis of one Japan ETF pair with an explicit structural-break interaction and time-ordered data.
 
-## Data description (272 words)
+The results would benefit U.S.-dollar investors, portfolio managers, and risk teams deciding whether a “hedged” Japan allocation actually offsets daily yen exposure. The pandemic indicator is descriptive, not causal, because many policies and market conditions changed simultaneously.
 
-The analysis uses 2,753 complete daily observations from February 6, 2014, through July 31, 2026: 1,348 pre-period and 1,405 post-period observations. Adjusted closing prices for HEWJ and EWJ come from the public Yahoo Finance chart history endpoints. The funds are a useful matched pair because iShares describes HEWJ as obtaining Japan equity exposure while hedging yen exposure and identifies EWJ as the underlying unhedged Japan equity fund. DEXJPUS, the noon New York yen-per-U.S.-dollar exchange rate, comes from the Federal Reserve Bank of St. Louis (FRED).
+## Data description (276 words)
 
-The response and three focal model terms are the return spread (Y_t), yen appreciation (JPYapp_t), the categorical `Post` indicator, and `JPYapp × Post`. Eight additional predictors address observable market conditions: the daily Nikkei 225 return; Japan SMB, HML, RMW, and CMA factors; Japan momentum (MOM); the daily log change in VIX; and the previous month's U.S.–Japan short-term interest-rate differential. Japan factor returns are from Kenneth French's open Data Library and are measured in U.S. dollars. The Nikkei 225, VIX, and interest-rate series are from FRED. Lagging the monthly rate differential by one month prevents using a same-month value that may not have been known at the start of each daily observation.
+The analysis contains 2,753 complete daily observations from February 6, 2014, through July 31, 2026. Yahoo Finance distributes histories assembled from market quotations and corporate actions for investment analysis; we use adjusted closes for HEWJ and EWJ. FRED redistributes official and market series for economic research: DEXJPUS is the Federal Reserve's noon New York yen-per-dollar quote; the Nikkei 225, VIX, and short-term rates represent equity, expected volatility, and monetary conditions. Kenneth French's Data Library constructs research portfolios from security returns using published factor definitions; we use its Japan five-factor and momentum series.
 
-All series are joined by trading date, transformed only after alignment, and complete cases are retained. Percentage variables are expressed in percentage points, which makes the focal slope directly interpretable. The frozen raw files, SHA-256 checksums, cleaned CSV, R script, and machine-readable model outputs accompany this proposal. Data access links are: [Yahoo HEWJ](https://finance.yahoo.com/quote/HEWJ/history/), [Yahoo EWJ](https://finance.yahoo.com/quote/EWJ/history/), [FRED DEXJPUS](https://fred.stlouisfed.org/series/DEXJPUS), [FRED Nikkei 225](https://fred.stlouisfed.org/series/NIKKEI225), [FRED VIX](https://fred.stlouisfed.org/series/VIXCLS), and [Kenneth French's Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html).
+The response, the daily HEWJ-minus-EWJ log-return spread, has mean 0.0206 percentage points, standard deviation 0.6271, and range -4.3097 to 3.7826. It is continuous and can take either sign, making a Gaussian linear conditional mean interpretable. Daily observations are temporally ordered rather than strictly independent, so independence is explicitly assessed in the residual analysis and no causal interpretation is made.
 
-## Ethics statement (194 words)
+Table 1 summarizes the response and every predictor. Extreme daily movements appear in the response, Nikkei return, momentum, and VIX change; the rate differential is slow-moving because monthly observations are carried forward with a one-month lag. `Post` has 1,348 pre-period and 1,405 post-period observations. Complete cases are retained after joining by trading date.
 
-The project uses only public, aggregate market prices and factor series. It contains no personal information, human-subject data, private holdings, or individual trading records, so privacy and consent risks are minimal. Nevertheless, finance results can be misused if a descriptive association is presented as investment advice or as a causal pandemic effect. We will state that the results describe this ETF pair over this sample and do not establish that COVID-19 caused the slope change. Survivorship and product-selection concerns also matter: HEWJ and EWJ are currently traded funds selected because they form a convenient matched pair, not a random sample of all hedged products.
+The model includes yen appreciation, `Post`, Nikkei return, SMB, HML, RMW, CMA, MOM, log VIX change, and the lagged U.S.-Japan rate differential. The `JPYapp × Post` interaction directly answers whether the conditional yen slope differs across the pandemic break. The split is substantively pre-specified from the WHO announcement rather than chosen by searching for the smallest p-value. Data websites and complete citations appear below.
 
-Reproducibility is addressed by preserving the exact downloaded files, documenting transformations, reporting the exclusion of March 11, 2020, and running the entire analysis in R. Adjusted prices incorporate provider-defined corporate-action adjustments; we will not imply that they are transaction prices available without costs. Yahoo, FRED, iShares, and Kenneth French data remain subject to their publishers' terms and revision practices. We will cite each provider and share links rather than claim ownership. Finally, any predictive evaluation is historical and does not support a promise of future returns or a trading recommendation.
+## Ethics discussion (189 words)
 
-## Preliminary results (368 words)
+The dataset is trustworthy because its provenance, ownership, and transformations are documented. Yahoo Finance closes, FRED series, and Kenneth French factors are public sources, but authority does not eliminate error: providers can revise observations, calendars may differ, and adjusted prices depend on provider methods. We preserve snapshots and SHA-256 checksums, document transformations, and avoid overstating precision. This addresses the module's trustworthiness criteria of provenance, transparency, accuracy, and reproducibility.
+
+Collection and use are ethically low risk. The sources contain aggregate market prices and factor portfolios, not personal information, private holdings, individual trading records, or human-subject data. Consent, confidentiality, and re-identification risks are minimal. We respect ownership by citing each provider, keeping the repository private while terms are reviewed, and not claiming third-party observations.
+
+The principal ethical risk is interpretation. A descriptive association could be presented incorrectly as investment advice or evidence that COVID-19 caused a change. We will state that results apply to one ETF pair, acknowledge survivorship and product-selection limitations, and avoid causal language because changes were uncontrolled. Historical predictive performance is not a promise of future returns. These limits make the use proportionate to the data and question.
+
+## Preliminary results (351 words)
 
 The full ordinary least-squares model is
 
 \[
-Y_t=\beta_0+\beta_1JPYapp_t+\beta_2Post_t+\beta_3(JPYapp_t\times Post_t)+\gamma'Z_t+\varepsilon_t,
+Y(t) = b0 + b1 JPYapp(t) + b2 Post(t) + b3 [JPYapp(t) x Post(t)] + g'Z(t) + e(t),
 \]
 
-where (Z_t) contains the eight market and factor controls. The model explains 71.21% of daily variation in the HEWJ-minus-EWJ spread (adjusted (R^2=71.10\%\)); the focal-only model explains 70.37%. The pre-pandemic yen slope is -0.852 (classical SE 0.0178; HAC(5) SE 0.0307; HAC p < 0.001). Thus, a one-percentage-point yen appreciation is associated with an approximately 0.852-percentage-point lower hedged-minus-unhedged return before the break, conditional on the controls.
+where \(Z_t\) contains the eight market and factor controls. Table 2 reports every coefficient with a classical standard error and 95% confidence interval. The model explains 71.21% of daily spread variation (adjusted \(R^2=71.10\%\)). The pre-period yen slope is -0.852 (SE 0.0178; 95% CI [-0.887, -0.817]). Thus, conditional on the controls, a one-percentage-point yen appreciation is associated with a 0.852-percentage-point lower HEWJ-minus-EWJ return. The interaction is -0.0648 (SE 0.0227; p = 0.0043), giving an implied post-period slope of -0.917. The period level shift is not significant. VIX log change is negative; most other controls are imprecisely estimated.
 
-The interaction estimate is -0.0648. Under classical OLS it is statistically significant (SE 0.0227, p = 0.0043), but with Newey-West HAC(5) inference it is only marginal (SE 0.0355, p = 0.0683; 95% CI [-0.1345, 0.0049]). The implied post-pandemic slope is -0.917. Both the pre and post slopes differ statistically from the theoretical -1 benchmark under HAC(5), although the post-period difference is economically smaller. The level shift at zero yen movement is 0.0085 percentage points and is not significant with HAC inference (p = 0.176). Among the controls, the VIX change has a negative coefficient (-0.00687; HAC p < 0.001); most other control coefficients are imprecisely estimated.
+The strong negative currency slope is consistent with Hau and Rey's joint currency-equity mechanism and with the hedge interpretation. Its departure from exactly -1 agrees with Campbell et al.'s result that effective hedges need not be mechanical one-for-one positions. The mostly small factor coefficients suggest that pairing HEWJ with EWJ removes much common equity exposure, while retaining Fama-French controls prevents that conclusion from being assumed. The changed slope is directionally compatible with Shank and Vianna's evidence of time-varying currency-hedged ETF dynamics, although our pandemic comparison is not causal.
 
-The model does not satisfy all ideal iid-error assumptions. The Breusch–Pagan test rejects homoskedasticity (p = 0.0048), the five-lag Breusch–Godfrey test rejects no serial correlation (p < 0.001), and the Q-Q plot shows heavy tails. Durbin–Watson is 2.85, consistent with negative first-order residual autocorrelation. Multicollinearity is not severe: the largest VIF is 3.55 (HML). These findings are why the main interpretation reports both classical OLS and HAC(5) uncertainty rather than relying on conventional p-values alone.
+Figure 2 provides the complete preliminary diagnostic grid. Residuals versus fitted values show no dominant smooth curve, but the RESET test rejects exact functional form (p = 0.001), so linearity remains questionable. Residual spread changes across fitted values and the Breusch-Pagan test rejects constant variance (p = 0.0048). The Q-Q plot has heavy tails and Jarque-Bera rejects normality (p < 0.001). Residuals over time and the ACF show dependence; the five-lag Breusch-Godfrey test rejects independence (p < 0.001), and Durbin-Watson is 2.85. The maximum VIF is 3.55, so severe multicollinearity is not evident. There are 137 cases above the Cook's-distance screening threshold \(4/n\), with maximum 0.136, indicating influential observations for later investigation.
 
-As a secondary predictive check, an 80/20 chronological split trained through January 29, 2024, and tested from January 30, 2024, through July 31, 2026. The full model achieved RMSE 0.313 and MAE 0.219 percentage points, compared with 0.654 and 0.463 for a training-sample historical-mean benchmark. This check is supportive but not a substitute for inference because later observations may come from a different regime.
+These are preliminary OLS results. In accordance with the Part 1 instruction, we diagnose but do not correct violations here; robust inference and sensitivity analysis are deferred to the final project.
 
 ## Plan for the remaining analysis (275 words)
 
-First, we will make the OLS specification and its estimand explicit: the interaction estimates a conditional change in the contemporaneous yen-spread association, not a causal pandemic effect. Classical OLS intervals will be shown for course continuity, while Newey-West HAC(5) intervals will be the primary time-series sensitivity analysis. We will also report the two implied period-specific yen slopes and formally test each against -1.
+The focal terms - yen appreciation, `Post`, and their interaction - will remain because they define the research question. Other controls will first be retained on substantive grounds. We will compare theory-preserving nested models using partial F-tests, adjusted \(R^2\), residual behavior, and focal-coefficient stability. We will not drop a control solely because its p-value exceeds 0.05, and hierarchy will be respected.
 
-Second, we will investigate misspecification identified in the preliminary diagnostics. Residual-versus-fitted, Q-Q, time-order, and autocorrelation plots will be included. We will examine influential observations using Cook's distance and repeat the focal estimates after pre-specified winsorization of continuous daily changes at the 0.5th and 99.5th percentiles. This robustness analysis will be labeled as secondary; it will not replace the unmodified-data result. We will compare HAC lags of 1, 5, and 10 trading days and assess whether conclusions about the interaction change.
+After every material specification change, we will recheck residual-versus-fitted, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Because the model shows heteroskedasticity, dependence, heavy tails, and functional-form evidence, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation, which is valid for signed returns; a direct logarithm is invalid. Transformations will be compared for assumption improvement and interpretability, not selected to manufacture significance.
 
-Third, we will test whether the selected break date drives the result by using a small, declared sensitivity window around March 11, 2020, rather than searching over all possible dates. We will also compare the full model with the focal-only model using adjusted (R^2), residual behavior, and the stability of the focal coefficients. Variance-inflation factors will document collinearity.
+Influential dates will be documented before any sensitivity run. The primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and the exclusion of individually justified data errors, if any. Once a final functional form is chosen, classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will also vary the pandemic cut within a small declared window rather than search all dates.
 
-Finally, prediction will remain secondary to explanation. We will preserve temporal ordering, compare against a historical-mean benchmark, and report RMSE and MAE on the untouched final 20% of dates. No random cross-validation will be used for time-series observations. All final tables and figures will be generated by the supplied R code from the frozen raw files, and discrepancies between conventional and robust inference will be reported rather than selectively omitted.
+Prediction remains secondary. A chronological 80/20 split will train on earlier dates and evaluate later dates against a historical-mean benchmark using RMSE and MAE. No random cross-validation will be used. The frozen raw files, cleaned CSV, code, and outputs will be versioned together.
+
+The schedule in Table 3 assigns analysis, poster, and recording milestones. Member placeholders will be replaced with names from the signed Teamwork Agreement before submission.
 
 ## References
 
@@ -77,13 +85,18 @@ Shank, C. A., & Vianna, A. C. (2016). Are US-dollar-hedged-ETF investors aggress
 
 ## Data and product documentation
 
-Federal Reserve Bank of St. Louis. DEXJPUS; NIKKEI225; VIXCLS; IRSTCI01USM156N; IRSTCI01JPM156N. FRED.  
-iShares. HEWJ and EWJ fund pages and currency-hedged product brief.  
-Kenneth R. French Data Library. Japan 5 Factors [Daily] and Japan Momentum Factor [Daily].  
-World Health Organization. (2020, March 11). WHO Director-General's opening remarks at the media briefing on COVID-19.
+Federal Reserve Bank of St. Louis. (n.d.). *DEXJPUS; NIKKEI225; VIXCLS; IRSTCI01USM156N; IRSTCI01JPM156N* [Data sets]. FRED. https://fred.stlouisfed.org/
 
-## Submission items still requiring group input
+iShares. (n.d.). *HEWJ and EWJ fund pages and currency-hedged product documentation*. https://www.ishares.com/
 
-1. Replace bracketed member names and contribution statements.
-2. Make the separate contribution agreement PDF match this proposal.
-3. Upload the cleaned CSV and raw-source folder to OneDrive and insert shareable links if the course submission form requires them.
+Kenneth R. French Data Library. (n.d.). *Japan 5 factors [Daily] and Japan momentum factor [Daily]* [Data sets]. https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html
+
+World Health Organization. (2020, March 11). *WHO Director-General's opening remarks at the media briefing on COVID-19*. https://www.who.int/
+
+Yahoo Finance. (n.d.). *HEWJ and EWJ historical data* [Data sets]. https://finance.yahoo.com/
+
+## Submission items requiring group confirmation
+
+1. Replace bracketed member names and role assignments with the actual group roster.
+2. Complete and sign the course's Group Teamwork Agreement PDF using the same names and responsibilities.
+3. Upload the prepared original and cleaned CSV folders to UofT OneDrive and add a Quercus submission comment with permission set to “anyone in UofT with the link can access.”
