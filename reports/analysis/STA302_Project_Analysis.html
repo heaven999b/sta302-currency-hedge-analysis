@@ -401,11 +401,13 @@ suppressPackageStartupMessages(library(jsonlite))
 locate_project_dir &lt;- function() {
   file_args &lt;- grep(&quot;^--file=&quot;, commandArgs(trailingOnly = FALSE), value = TRUE)
   script_candidate &lt;- if (length(file_args)) {
-    file.path(dirname(normalizePath(sub(&quot;^--file=&quot;, &quot;&quot;, file_args[1]), mustWork = FALSE)), &quot;..&quot;)
+    dirname(normalizePath(sub(&quot;^--file=&quot;, &quot;&quot;, file_args[1]), mustWork = FALSE))
   } else {
     NA_character_
   }
-  candidates &lt;- unique(c(script_candidate, getwd(), file.path(getwd(), &quot;..&quot;),
+  candidates &lt;- unique(c(script_candidate, file.path(script_candidate, &quot;..&quot;),
+                         file.path(script_candidate, &quot;..&quot;, &quot;..&quot;),
+                         getwd(), file.path(getwd(), &quot;..&quot;),
                          file.path(getwd(), &quot;..&quot;, &quot;..&quot;)))
   candidates &lt;- candidates[!is.na(candidates)]
   for (candidate in candidates) {
@@ -1405,7 +1407,7 @@ writeLines(log_lines, file.path(results_dir, &quot;R_run_log.txt&quot;))
 cat(paste(log_lines[1:11], collapse = &quot;\n&quot;), &quot;\n&quot;)</code></pre>
 <pre><code>## R version: R version 4.4.3 (2025-02-28)
 ## jsonlite version: 2.0.0
-## Run time UTC: 2026-09-20 21:32:09 UTC
+## Run time UTC: 2026-09-20 21:37:24 UTC
 ## Rows: 2655
 ## Date range: 2014-02-06 to 2026-07-31
 ## Pre/Post rows: 1304 / 1351

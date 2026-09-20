@@ -10,7 +10,7 @@
 
 The pipeline does not fetch live data. This avoids silent revisions and makes the
 reported numbers reproducible. Provider ownership and redistribution conditions
-remain in force; see `DATA_USE.md`.
+remain in force; see `data/DATA_USE.md`.
 
 原始数据、来源、抓取日期、哈希值、变量定义和分析规则全部固定。流水线不抓取
 实时数据，避免供应商修订导致结果漂移。
@@ -30,7 +30,7 @@ Create the environment in a path without spaces:
 ```bash
 conda env create -p /private/tmp/sta302_r_env -f environment.yml
 conda activate /private/tmp/sta302_r_env
-bash scripts/run_all.sh
+bash code/pipeline/run_all.sh
 ```
 
 ## What `run_all.sh` proves / 一键流程验证内容

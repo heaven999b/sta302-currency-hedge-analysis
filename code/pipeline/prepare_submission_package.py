@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "submission"
 ORIGINAL = PACKAGE / "data" / "original"
 CLEANED = PACKAGE / "data" / "cleaned"
@@ -51,11 +51,11 @@ def main() -> None:
 
     shutil.copy2(ROOT / "data" / "processed" / "sta302_daily_analysis.csv",
                  CLEANED / "sta302_daily_analysis.csv")
-    shutil.copy2(ROOT / "analysis" / "STA302_Project_Analysis.Rmd",
+    shutil.copy2(ROOT / "code" / "analysis" / "STA302_Project_Analysis.Rmd",
                  CODE / "STA302_Project_Analysis.Rmd")
-    shutil.copy2(ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf",
+    shutil.copy2(ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf",
                  PROPOSAL / "STA302_Research_Proposal_Official_EN.pdf")
-    shutil.copy2(ROOT / "docs" / "submission" / "QUERCUS_SUBMISSION_CHECKLIST.md",
+    shutil.copy2(ROOT / "reports" / "submission" / "QUERCUS_SUBMISSION_CHECKLIST.md",
                  PACKAGE / "QUERCUS_SUBMISSION_CHECKLIST.md")
 
     manifest_rows = []

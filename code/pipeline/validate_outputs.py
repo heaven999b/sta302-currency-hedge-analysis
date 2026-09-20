@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def require(condition: bool, message: str) -> None:
@@ -122,10 +122,10 @@ def validate_analysis() -> None:
 
 def validate_artifacts() -> None:
     required = [
-        ROOT / "output" / "STA302_Project_Analysis.html",
-        ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf",
-        ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf",
-        ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf",
+        ROOT / "reports" / "analysis" / "STA302_Project_Analysis.html",
+        ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf",
+        ROOT / "reports" / "proposal" / "STA302_Bilingual_Research_Proposal.pdf",
+        ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_ZH.pdf",
         ROOT / "figures" / "fx_slope_by_period.png",
         ROOT / "figures" / "residual_diagnostics.png",
         ROOT / "figures" / "coefficient_intervals_hac5.png",
@@ -145,9 +145,9 @@ def validate_artifacts() -> None:
     for target in required:
         require(target.is_file() and target.stat().st_size > 1000, f"Missing or empty artifact: {target}")
 
-    official_pdf = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf"
-    bilingual_pdf = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
-    chinese_pdf = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf"
+    official_pdf = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf"
+    bilingual_pdf = ROOT / "reports" / "proposal" / "STA302_Bilingual_Research_Proposal.pdf"
+    chinese_pdf = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_ZH.pdf"
     if shutil.which("pdftotext"):
         text = subprocess.check_output(["pdftotext", str(official_pdf), "-"], text=True)
         for phrase in [
@@ -179,7 +179,7 @@ def validate_artifacts() -> None:
     require(len(manifest_rows) >= 45, "Core artifact manifest is unexpectedly incomplete")
     manifest_paths = {row["relative_path"] for row in manifest_rows}
     for required_path in [
-        "analysis/run_analysis.R",
+        "code/analysis/run_analysis.R",
         "config/analysis_protocol.yml",
         "data/processed/sta302_daily_analysis.csv",
         "results/functional_form_sensitivity.csv",
@@ -187,7 +187,7 @@ def validate_artifacts() -> None:
         "results/model_selection_rolling_origin.csv",
         "results/influence_sensitivity.csv",
         "results/break_date_sensitivity.csv",
-        "output/STA302_Project_Analysis.html",
+        "reports/analysis/STA302_Project_Analysis.html",
     ]:
         require(required_path in manifest_paths, f"Artifact manifest omits {required_path}")
     for row in manifest_rows:
@@ -214,7 +214,7 @@ def validate_submission() -> None:
             require(target.suffix.lower() == ".csv", f"Submission data file is not CSV: {target}")
 
     rmd = (package / "code" / "STA302_Project_Analysis.Rmd").read_text(encoding="utf-8")
-    require('source("analysis/run_analysis.R")' not in rmd, "Submission Rmd still sources an external R script")
+    require('source("code/analysis/run_analysis.R")' not in rmd, "Submission Rmd still sources an external R script")
     for phrase in ["read_yahoo_adjusted <- function", "native_log_return <- function", "full_formula <-",
                    "rolling-origin evaluation", "residual_diagnostics.png"]:
         require(phrase in rmd, f"Standalone Rmd is missing analysis code: {phrase}")

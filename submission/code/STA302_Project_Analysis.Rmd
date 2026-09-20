@@ -31,11 +31,13 @@ suppressPackageStartupMessages(library(jsonlite))
 locate_project_dir <- function() {
   file_args <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
   script_candidate <- if (length(file_args)) {
-    file.path(dirname(normalizePath(sub("^--file=", "", file_args[1]), mustWork = FALSE)), "..")
+    dirname(normalizePath(sub("^--file=", "", file_args[1]), mustWork = FALSE))
   } else {
     NA_character_
   }
-  candidates <- unique(c(script_candidate, getwd(), file.path(getwd(), ".."),
+  candidates <- unique(c(script_candidate, file.path(script_candidate, ".."),
+                         file.path(script_candidate, "..", ".."),
+                         getwd(), file.path(getwd(), ".."),
                          file.path(getwd(), "..", "..")))
   candidates <- candidates[!is.na(candidates)]
   for (candidate in candidates) {

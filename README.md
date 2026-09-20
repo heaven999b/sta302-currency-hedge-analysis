@@ -104,41 +104,33 @@ while preserving a directly comparable presentation.
 
 ```text
 .
-├── analysis/
-│   ├── run_analysis.R                  # complete deterministic R pipeline
-│   └── STA302_Project_Analysis.Rmd     # course-facing reproducibility entry
+├── code/                               # all executable source code
+│   ├── README.md                       # what every code file does
+│   ├── analysis/                       # statistical analysis and standalone Rmd
+│   ├── pipeline/                       # build, packaging and validation scripts
+│   └── tests/                          # end-to-end assertions
 ├── data/
+│   ├── README.md                       # data directory guide
 │   ├── raw/                            # frozen source snapshots + SHA-256
 │   ├── original_csv/                   # deterministic CSV exports of all sources
 │   ├── DATA_DICTIONARY.csv             # processed-field definitions
 │   ├── SOURCE_MANIFEST.csv             # machine-readable source provenance
 │   └── processed/                      # cleaned modeling table
-├── docs/proposal/
-│   ├── STA302_Research_Proposal_EN.md  # official English proposal
-│   └── STA302_Research_Proposal_ZH.md  # aligned Chinese translation
-├── figures/                            # generated figures
-├── results/                            # coefficients, diagnostics, validation, RDS
-├── tests/test_pipeline.R               # end-to-end assertions
+├── results/                            # machine-readable experiment results
+│   └── README.md                       # result-file index and interpretation
+├── figures/                            # generated visual evidence
+│   └── README.md                       # figure index by research stage
+├── reports/                            # human-readable reports and PDFs
+│   ├── README.md                       # report index
+│   ├── analysis/                       # final findings and rendered HTML
+│   ├── proposal/                       # proposal sources and three PDFs
+│   └── submission/                     # submission instructions
 ├── config/analysis_protocol.yml        # frozen split and inference protocol
-├── scripts/
-│   ├── build_bilingual_proposal_pdf.py
-│   ├── prepare_submission_package.py
-│   ├── test_submission_package.py      # isolated CSV-only knit test
-│   ├── run_all.sh
-│   └── validate_outputs.py
-├── output/
-│   ├── STA302_Project_Analysis.html
-│   └── pdf/
-│       ├── STA302_Research_Proposal_Official_EN.pdf
-│       ├── STA302_Research_Proposal_Official_ZH.pdf
-│       └── STA302_Bilingual_Research_Proposal.pdf
 ├── submission/                         # Quercus-ready staging package
 │   ├── code/                           # standalone Rmd
 │   ├── data/original/                  # all source data as CSV
 │   ├── data/cleaned/                   # cleaned modeling CSV
 │   └── proposal/                       # official English PDF
-├── SOURCE_MANIFEST.md
-├── DATA_USE.md
 ├── REPRODUCIBILITY.md
 └── environment.yml
 ```
@@ -155,7 +147,7 @@ conda activate /private/tmp/sta302_r_env
 Run the complete pipeline from the repository root:
 
 ```bash
-bash scripts/run_all.sh
+bash code/pipeline/run_all.sh
 ```
 
 This command:
@@ -175,15 +167,15 @@ This command:
 
 ## Primary deliverables / 主要交付物
 
-- `output/pdf/STA302_Research_Proposal_Official_EN.pdf` - formal English-only course submission.
-- `output/pdf/STA302_Research_Proposal_Official_ZH.pdf` - complete Chinese proposal with tables and figures.
-- `output/pdf/STA302_Bilingual_Research_Proposal.pdf` - English proposal followed by a faithful Chinese study copy.
-- `analysis/STA302_Project_Analysis.Rmd` - self-contained course submission containing the full cleaning, modeling, table, and diagnostic code.
-- `output/STA302_Project_Analysis.html` - verified knitted analysis.
+- `reports/proposal/STA302_Research_Proposal_Official_EN.pdf` - formal English-only course submission.
+- `reports/proposal/STA302_Research_Proposal_Official_ZH.pdf` - complete Chinese proposal with tables and figures.
+- `reports/proposal/STA302_Bilingual_Research_Proposal.pdf` - English proposal followed by a faithful Chinese study copy.
+- `code/analysis/STA302_Project_Analysis.Rmd` - self-contained course submission containing the full cleaning, modeling, table, and diagnostic code.
+- `reports/analysis/STA302_Project_Analysis.html` - verified knitted analysis.
 - `data/processed/sta302_daily_analysis.csv` - final complete-case modeling table.
 - `submission/` - staged PDF, standalone Rmd, original CSV exports/copies, cleaned CSV, checklist, and hashes.
 - `results/R_run_log.txt` - R version, package versions, sample and results.
-- `docs/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
+- `reports/analysis/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
 - `results/rolling_origin_fold_metrics.csv`, `results/model_selection_rolling_origin.csv`, and `results/heldout_test_metrics.csv` - rolling validation and untouched-test evidence.
 - `results/data_alignment_audit.csv` and `results/data_alignment_sensitivity.csv` - date-interval audit and robustness result.
 - `results/functional_form_sensitivity.csv` - quadratic and Yeo-Johnson checks without reopening test selection.
@@ -193,15 +185,15 @@ This command:
 
 The proposal PDFs remain the Part 1 proposal and therefore describe the
 robustness work as planned. Completed final-project evidence is reported in the
-HTML analysis and `docs/RESULTS_AND_CONCLUSIONS.md`; the original proposal is not
+HTML analysis and `reports/analysis/RESULTS_AND_CONCLUSIONS.md`; the original proposal is not
 silently rewritten after results are known.
 
 提案 PDF 保留为第一部分提案，因此仍以“计划”表述后续稳健性工作。完成后的最终证据
-位于 HTML 分析报告和 `docs/RESULTS_AND_CONCLUSIONS.md`，不在看到结果后反向改写原提案。
+位于 HTML 分析报告和 `reports/analysis/RESULTS_AND_CONCLUSIONS.md`，不在看到结果后反向改写原提案。
 
 ## Data and integrity / 数据与诚信
 
-The repository contains frozen third-party data snapshots for private educational reproducibility. Ownership and usage terms remain with Yahoo Finance, FRED, iShares, and the Kenneth French Data Library. Do not make this repository public until the data-provider terms have been reviewed. See `DATA_USE.md` and `SOURCE_MANIFEST.md`.
+The repository contains frozen third-party data snapshots for private educational reproducibility. Ownership and usage terms remain with Yahoo Finance, FRED, iShares, and the Kenneth French Data Library. Do not make this repository public until the data-provider terms have been reviewed. See `data/DATA_USE.md` and `data/SOURCE_MANIFEST.md`.
 
 本仓库为了私有教学复现而保存第三方数据快照。数据所有权和使用条款仍属于 Yahoo Finance、FRED、iShares 与 Kenneth French Data Library。在审查各数据源条款前，请勿把仓库改为公开。
 

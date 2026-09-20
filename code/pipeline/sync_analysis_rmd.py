@@ -4,9 +4,9 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "analysis" / "run_analysis.R"
-TARGET = ROOT / "analysis" / "STA302_Project_Analysis.Rmd"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "code" / "analysis" / "run_analysis.R"
+TARGET = ROOT / "code" / "analysis" / "STA302_Project_Analysis.Rmd"
 
 
 def main() -> None:

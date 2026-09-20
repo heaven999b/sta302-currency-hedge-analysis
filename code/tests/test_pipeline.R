@@ -2,7 +2,7 @@ options(stringsAsFactors = FALSE)
 
 args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", args, value = TRUE)
-root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg[1])), ".."), mustWork = TRUE)
+root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg[1])), "..", ".."), mustWork = TRUE)
 
 read_result <- function(name) read.csv(file.path(root, "results", name), check.names = FALSE)
 require_true <- function(condition, message) if (!isTRUE(condition)) stop(message, call. = FALSE)

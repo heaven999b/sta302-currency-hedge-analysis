@@ -8,7 +8,7 @@ import hashlib
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "results" / "ARTIFACT_MANIFEST.csv"
 
 
@@ -21,20 +21,20 @@ def classify(relative: Path) -> tuple[str, str]:
     if path.startswith("data/raw/"):
         return "frozen_input", "external provider snapshot"
     if path.startswith("data/original_csv/"):
-        return "csv_export", "scripts/export_original_csv.py"
+        return "csv_export", "code/pipeline/export_original_csv.py"
     if path.startswith("data/processed/"):
-        return "processed_data", "analysis/run_analysis.R"
+        return "processed_data", "code/analysis/run_analysis.R"
     if path.startswith("results/"):
-        return "statistical_result", "analysis/run_analysis.R or manifest builder"
+        return "statistical_result", "code/analysis/run_analysis.R or manifest builder"
     if path.startswith("figures/"):
-        return "figure", "analysis/run_analysis.R or PDF builder"
-    if path.startswith("output/"):
+        return "figure", "code/analysis/run_analysis.R or PDF builder"
+    if path.startswith("reports/") and relative.suffix.lower() in {".html", ".pdf"}:
         return "rendered_output", "R Markdown or PDF builder"
-    if path.startswith("analysis/") or path.startswith("scripts/") or path.startswith("tests/"):
+    if path.startswith("code/"):
         return "executable_code", "version-controlled source"
     if path.startswith("config/") or path.endswith("environment.yml"):
         return "configuration", "version-controlled source"
-    if path.startswith("docs/") or path.endswith(".md") or path.endswith(".csv"):
+    if path.endswith(".md") or path.endswith(".csv"):
         return "documentation", "version-controlled source"
     return "project_file", "version-controlled source"
 
@@ -42,13 +42,13 @@ def classify(relative: Path) -> tuple[str, str]:
 def included(path: Path) -> bool:
     relative = path.relative_to(ROOT)
     parts = relative.parts
-    if not path.is_file() or ".git" in parts or "submission" in parts or "tmp" in parts:
+    if not path.is_file() or ".git" in parts or parts[0] == "submission" or "tmp" in parts:
         return False
     if path == OUTPUT or "__pycache__" in parts:
         return False
     return (
-        parts[0] in {"analysis", "config", "data", "docs", "figures", "output", "results", "scripts", "tests"}
-        or relative.as_posix() in {"README.md", "SOURCE_MANIFEST.md", "DATA_USE.md", "REPRODUCIBILITY.md", "environment.yml"}
+        parts[0] in {"code", "config", "data", "figures", "reports", "results"}
+        or relative.as_posix() in {"README.md", "REPRODUCIBILITY.md", "environment.yml"}
     )
 
 

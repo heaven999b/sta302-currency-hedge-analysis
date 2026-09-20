@@ -29,12 +29,12 @@ from reportlab.platypus import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
-EN_SOURCE = ROOT / "docs" / "proposal" / "STA302_Research_Proposal_EN.md"
-ZH_SOURCE = ROOT / "docs" / "proposal" / "STA302_Research_Proposal_ZH.md"
-OUTPUT_EN = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf"
-OUTPUT_BILINGUAL = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
-OUTPUT_ZH = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf"
+ROOT = Path(__file__).resolve().parents[2]
+EN_SOURCE = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_EN.md"
+ZH_SOURCE = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_ZH.md"
+OUTPUT_EN = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_EN.pdf"
+OUTPUT_BILINGUAL = ROOT / "reports" / "proposal" / "STA302_Bilingual_Research_Proposal.pdf"
+OUTPUT_ZH = ROOT / "reports" / "proposal" / "STA302_Research_Proposal_Official_ZH.pdf"
 SCATTER = ROOT / "figures" / "fx_slope_by_period.png"
 DIAGNOSTICS = ROOT / "figures" / "residual_diagnostics.png"
 SCATTER_ZH = ROOT / "figures" / "fx_slope_by_period_zh.png"
