@@ -159,6 +159,14 @@ one-command workflow and interpretation limits.
 
 ## Generated visual evidence / 结果图形
 
+The combined rolling-origin chart ranks all three candidates. The next three
+standalone files separately show the FX-interaction model, macro-control model,
+and initial full-factor model on an identical RMSE scale, so each specification
+can be audited without confusing their roles.
+
+汇总图用于比较三个候选模型；随后三张独立图依次对应汇率交互模型、宏观控制模型和
+初始完整因子模型，并使用完全相同的 RMSE 纵轴，避免混淆各模型的职责和结果。
+
 ```{{r generated-figures, echo=FALSE, out.width="95%", fig.align="center"}}
 figure_files <- file.path(figures_dir, c(
   "chronological_split.png",
@@ -167,6 +175,9 @@ figure_files <- file.path(figures_dir, c(
   "coefficient_intervals_hac5.png",
   "hac_lag_sensitivity.png",
   "rolling_origin_model_comparison.png",
+  "model_fx_interaction_rolling_rmse.png",
+  "model_macro_controls_rolling_rmse.png",
+  "model_full_factor_rolling_rmse.png",
   "heldout_test_predictions.png",
   "residual_diagnostics.png",
   "robustness_sensitivity.png",

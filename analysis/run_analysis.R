@@ -805,6 +805,35 @@ arrows(bar_pos, model_selection_rolling_origin$mean_RMSE - model_selection_rolli
 text(bar_pos, upper, labels = sprintf("%.4f", model_selection_rolling_origin$mean_RMSE), pos = 3)
 dev.off()
 
+# One standalone validation figure per candidate keeps the initial full model
+# and both reduced alternatives auditable without reading a combined chart.
+candidate_figure_files <- c(
+  "FX interaction" = "model_fx_interaction_rolling_rmse.png",
+  "Macro controls" = "model_macro_controls_rolling_rmse.png",
+  "Full factor model" = "model_full_factor_rolling_rmse.png"
+)
+common_fold_ylim <- c(0, max(rolling_origin_fold_metrics$RMSE) * 1.22)
+for (model_name in names(candidate_figure_files)) {
+  model_rows <- rolling_origin_fold_metrics[
+    rolling_origin_fold_metrics$model == model_name, ]
+  mean_rmse <- mean(model_rows$RMSE)
+  png(file.path(figures_dir, candidate_figure_files[[model_name]]),
+      width = 1600, height = 1050, res = 180)
+  bar_positions <- barplot(
+    model_rows$RMSE, names.arg = sub("Validate ", "", model_rows$fold),
+    col = if (model_name == selected_model_name) "#1f6aa5" else "#9eabb8",
+    ylim = common_fold_ylim, xlab = "Validation year", ylab = "RMSE",
+    main = paste0(model_name, if (model_name == selected_model_name) " (selected)" else "")
+  )
+  abline(h = mean_rmse, col = "#d94b36", lty = 2, lwd = 2)
+  text(bar_positions, model_rows$RMSE, sprintf("%.4f", model_rows$RMSE), pos = 3)
+  legend("topleft", legend = sprintf("Three-fold mean = %.4f", mean_rmse),
+         col = "#d94b36", lty = 2, lwd = 2, bty = "n")
+  mtext("Expanding training windows end in 2020, 2021, and 2022", side = 1,
+        line = 3.4, cex = .8, col = "grey35")
+  dev.off()
+}
+
 png(file.path(figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
 actual_roll <- trailing_mean(test_predictions$actual)
 pred_roll <- trailing_mean(test_predictions$predicted)

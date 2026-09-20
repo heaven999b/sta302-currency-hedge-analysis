@@ -74,6 +74,9 @@ require_true(nrow(csv_manifest) == 7L, "Original-source CSV export is incomplete
 required_figures <- c("chronological_split.png", "fx_slope_by_period.png",
                       "coefficient_intervals_hac5.png", "hac_lag_sensitivity.png",
                       "rolling_origin_folds.png", "rolling_origin_model_comparison.png",
+                      "model_fx_interaction_rolling_rmse.png",
+                      "model_macro_controls_rolling_rmse.png",
+                      "model_full_factor_rolling_rmse.png",
                       "heldout_test_predictions.png",
                       "residual_diagnostics.png", "robustness_sensitivity.png",
                       "influence_diagnostics.png")

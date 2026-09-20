@@ -70,6 +70,28 @@ The held-out exercise measures conditional fit using same-day observed predictor
 
 ![Rolling-origin comparison](figures/rolling_origin_model_comparison.png)
 
+### Candidate-specific validation figures / 各候选模型独立验证图
+
+The three candidates are also saved as separate files in `figures/`, using the
+same vertical scale and showing every validation-year RMSE plus the three-fold
+mean. This separates the initial full model from the two reduced alternatives
+while preserving a directly comparable presentation.
+
+三个候选模型同时以独立文件保存在 `figures/` 中，纵轴范围一致；每张图均展示三个
+验证年度的 RMSE 和三折平均值，因此可以分别检查初始完整模型和两个精简模型。
+
+**FX interaction / 汇率交互模型（最终选中）**
+
+![FX interaction rolling validation](figures/model_fx_interaction_rolling_rmse.png)
+
+**Macro controls / 宏观控制模型**
+
+![Macro controls rolling validation](figures/model_macro_controls_rolling_rmse.png)
+
+**Full factor model / 初始完整因子模型**
+
+![Full factor rolling validation](figures/model_full_factor_rolling_rmse.png)
+
 ![Held-out predictions](figures/heldout_test_predictions.png)
 
 ![Residual diagnostics](figures/residual_diagnostics.png)

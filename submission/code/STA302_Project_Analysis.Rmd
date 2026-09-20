@@ -831,6 +831,35 @@ arrows(bar_pos, model_selection_rolling_origin$mean_RMSE - model_selection_rolli
 text(bar_pos, upper, labels = sprintf("%.4f", model_selection_rolling_origin$mean_RMSE), pos = 3)
 dev.off()
 
+# One standalone validation figure per candidate keeps the initial full model
+# and both reduced alternatives auditable without reading a combined chart.
+candidate_figure_files <- c(
+  "FX interaction" = "model_fx_interaction_rolling_rmse.png",
+  "Macro controls" = "model_macro_controls_rolling_rmse.png",
+  "Full factor model" = "model_full_factor_rolling_rmse.png"
+)
+common_fold_ylim <- c(0, max(rolling_origin_fold_metrics$RMSE) * 1.22)
+for (model_name in names(candidate_figure_files)) {
+  model_rows <- rolling_origin_fold_metrics[
+    rolling_origin_fold_metrics$model == model_name, ]
+  mean_rmse <- mean(model_rows$RMSE)
+  png(file.path(figures_dir, candidate_figure_files[[model_name]]),
+      width = 1600, height = 1050, res = 180)
+  bar_positions <- barplot(
+    model_rows$RMSE, names.arg = sub("Validate ", "", model_rows$fold),
+    col = if (model_name == selected_model_name) "#1f6aa5" else "#9eabb8",
+    ylim = common_fold_ylim, xlab = "Validation year", ylab = "RMSE",
+    main = paste0(model_name, if (model_name == selected_model_name) " (selected)" else "")
+  )
+  abline(h = mean_rmse, col = "#d94b36", lty = 2, lwd = 2)
+  text(bar_positions, model_rows$RMSE, sprintf("%.4f", model_rows$RMSE), pos = 3)
+  legend("topleft", legend = sprintf("Three-fold mean = %.4f", mean_rmse),
+         col = "#d94b36", lty = 2, lwd = 2, bty = "n")
+  mtext("Expanding training windows end in 2020, 2021, and 2022", side = 1,
+        line = 3.4, cex = .8, col = "grey35")
+  dev.off()
+}
+
 png(file.path(figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
 actual_roll <- trailing_mean(test_predictions$actual)
 pred_roll <- trailing_mean(test_predictions$predicted)
@@ -1115,6 +1144,14 @@ one-command workflow and interpretation limits.
 
 ## Generated visual evidence / 结果图形
 
+The combined rolling-origin chart ranks all three candidates. The next three
+standalone files separately show the FX-interaction model, macro-control model,
+and initial full-factor model on an identical RMSE scale, so each specification
+can be audited without confusing their roles.
+
+汇总图用于比较三个候选模型；随后三张独立图依次对应汇率交互模型、宏观控制模型和
+初始完整因子模型，并使用完全相同的 RMSE 纵轴，避免混淆各模型的职责和结果。
+
 ```{r generated-figures, echo=FALSE, out.width="95%", fig.align="center"}
 figure_files <- file.path(figures_dir, c(
   "chronological_split.png",
@@ -1123,6 +1160,9 @@ figure_files <- file.path(figures_dir, c(
   "coefficient_intervals_hac5.png",
   "hac_lag_sensitivity.png",
   "rolling_origin_model_comparison.png",
+  "model_fx_interaction_rolling_rmse.png",
+  "model_macro_controls_rolling_rmse.png",
+  "model_full_factor_rolling_rmse.png",
   "heldout_test_predictions.png",
   "residual_diagnostics.png",
   "robustness_sensitivity.png",
