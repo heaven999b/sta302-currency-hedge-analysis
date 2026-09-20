@@ -38,13 +38,40 @@ slopes <- slopes[slopes$inference == "Newey-West HAC(5)", ]
 require_true(nrow(slopes) == 2L && all(slopes$p_value < 0.05),
              "Incomplete-hedging conclusion changed")
 
+functional <- read_result("functional_form_sensitivity.csv")
+require_true(nrow(functional) == 3L, "Functional-form sensitivity is incomplete")
+require_true(all(c("Primary linear response", "Quadratic yen sensitivity", "Yeo-Johnson response") %in%
+                   functional$specification), "Functional-form specifications changed")
+lambda_profile <- read_result("yeo_johnson_lambda_profile.csv")
+require_true(sum(as.logical(lambda_profile$selected)) == 1L, "Yeo-Johnson lambda was not selected uniquely")
+
+influence <- read_result("influence_sensitivity.csv")
+require_true(nrow(influence) == 3L, "Influence sensitivity is incomplete")
+require_true(influence$interaction_hac5_p[1] > 0.05 && any(influence$interaction_hac5_p[-1] < 0.05),
+             "Influence sensitivity no longer documents inferential fragility")
+influence_audit <- read_result("influence_audit.csv")
+require_true(sum(as.logical(influence_audit$flagged)) == 134L, "Cook's-distance audit changed")
+
+breaks <- read_result("break_date_sensitivity.csv")
+require_true(nrow(breaks) == 3L, "Break-date sensitivity is incomplete")
+require_true(any(breaks$interaction_hac5_p < 0.05) && any(breaks$interaction_hac5_p > 0.05),
+             "Break-date sensitivity no longer documents cutoff dependence")
+
+quality <- read_result("data_quality_audit.csv")
+expected_status <- quality$expected == "TRUE" | quality$expected == "2655"
+require_true(all(as.logical(quality$status) == expected_status), "Data-quality audit contains a failed check")
+
+csv_manifest <- read.csv(file.path(root, "data", "original_csv", "SHA256SUMS.csv"))
+require_true(nrow(csv_manifest) == 7L, "Original-source CSV export is incomplete")
+
 required_figures <- c("chronological_split.png", "fx_slope_by_period.png",
                       "coefficient_intervals_hac5.png", "hac_lag_sensitivity.png",
                       "tuning_model_comparison.png", "heldout_test_predictions.png",
-                      "residual_diagnostics.png")
+                      "residual_diagnostics.png", "robustness_sensitivity.png",
+                      "influence_diagnostics.png")
 for (figure in required_figures) {
   target <- file.path(root, "figures", figure)
   require_true(file.exists(target) && file.info(target)$size > 1000, paste("Missing figure", figure))
 }
 
-cat("R PIPELINE TESTS PASSED: alignment, chronological split, tuning lock, held-out test, HAC conclusions, and figures.\n")
+cat("R PIPELINE TESTS PASSED: alignment, chronological split, tuning lock, held-out test, HAC, nonlinear, influence, break-date, CSV-export, and figure checks.\n")

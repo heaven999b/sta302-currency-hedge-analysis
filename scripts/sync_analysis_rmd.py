@@ -21,7 +21,7 @@ output:
     toc_depth: 2
 ---
 
-## Purpose and protocol
+## Purpose and protocol / 研究目的与流程
 
 This standalone file imports the frozen source data, computes every price return
 on its native calendar before merging, enforces a common return interval, fits
@@ -29,13 +29,108 @@ OLS with Newey-West HAC inference, runs diagnostics, and performs a strict
 chronological 60%/20%/20% train/tuning/test evaluation. The test period is used
 once, after the predictive model is selected on the tuning period.
 
+本文件可独立读取冻结数据、在各数据自身交易日历内计算收益、执行严格同期合并、
+拟合 OLS 并使用 Newey-West HAC 推断，同时完成诊断、非线性检验、异常值敏感性、
+断点日期敏感性和固定的 60%/20%/20% 时间切分。原始测试集结论保持锁定，后续新增
+函数形式只在调优集比较，不重新利用测试集选模。
+
 ## Complete analysis code
 
 ```{{r complete-analysis, echo=TRUE, message=TRUE, warning=TRUE}}
 {analysis_code}
 ```
 
-## Generated visual evidence
+## Main results / 主要结果
+
+```{{r main-results, echo=FALSE}}
+main_interaction <- coef_hac5[coef_hac5$term == "JPY_app:PostPost", ]
+main_slopes <- hypothesis_tests[hypothesis_tests$inference == "Newey-West HAC(5)",
+                                c("period", "estimate", "std_error", "p_value")]
+main_table <- data.frame(
+  result = c("Pre-period slope", "Post-period slope", "Slope change (Post interaction)",
+             "Full-model R-squared", "Held-out selected-model RMSE", "Held-out mean-benchmark RMSE"),
+  estimate = c(main_slopes$estimate[main_slopes$period == "Pre-pandemic"],
+               main_slopes$estimate[main_slopes$period == "Post-pandemic"],
+               main_interaction$estimate, summary(full_model)$r.squared,
+               test_metrics$RMSE[1], test_metrics$RMSE[2]),
+  p_value = c(main_slopes$p_value[main_slopes$period == "Pre-pandemic"],
+              main_slopes$p_value[main_slopes$period == "Post-pandemic"],
+              main_interaction$p_value, NA, NA, NA)
+)
+knitr::kable(main_table, digits = 6,
+             caption = "Primary inference and locked held-out evaluation")
+```
+
+The HAC(5) interaction is not significant at 5%, so the primary model does not
+establish a stable pandemic slope change. Both period-specific slopes differ
+from the complete-hedge benchmark of -1. The selected conditional-fit model
+substantially outperforms the naive held-out benchmarks, but it uses same-day
+observed predictors and is not a tradable ahead-of-time forecast.
+
+HAC(5) 下交互项在 5% 水平不显著，因此主模型不足以证明疫情前后斜率稳定改变；
+两个分时期斜率都显著不同于完全对冲基准 -1。锁定模型在留出集上优于朴素基准，
+但使用了当日已观测变量，不是可交易的提前预测。
+
+## Assumption diagnostics / 假设诊断
+
+```{{r diagnostic-table, echo=FALSE}}
+diagnostic_display <- diagnostics[diagnostics$metric %in% c(
+  "durbin_watson", "breusch_pagan_p", "breusch_godfrey_lag5_p",
+  "jarque_bera_p", "reset_p", "max_vif", "cooks_over_4_over_n"
+), ]
+knitr::kable(diagnostic_display, caption = "Primary-model diagnostics")
+```
+
+Residual heteroskedasticity, serial dependence, heavy tails, and functional-form
+evidence remain. HAC addresses covariance-based inference only; it does not make
+these residual features disappear.
+
+残差仍显示异方差、序列相关、厚尾与函数形式问题。HAC 只修正协方差推断，不能让
+这些残差特征消失。
+
+## Completed robustness analysis / 已完成稳健性分析
+
+```{{r robustness-tables, echo=FALSE}}
+knitr::kable(functional_form_sensitivity, digits = 6,
+             caption = "Functional-form sensitivity; nonlinear alternatives use tuning only")
+knitr::kable(influence_sensitivity, digits = 6,
+             caption = "Influential-observation sensitivity")
+knitr::kable(break_date_sensitivity, digits = 6,
+             caption = "Declared pandemic-break window")
+```
+
+The quadratic terms are jointly significant under HAC(5), but the quadratic
+model has worse tuning RMSE than the primary linear full model. The Yeo-Johnson
+lambda selected on training data is close to one and improves tuning RMSE only
+slightly; it does not resolve the diagnostic rejections and makes the hedge
+slope less directly interpretable. The sign and incomplete-hedge conclusion are
+stable, but the 5% significance of the pandemic slope change is not: it changes
+under winsorization, Cook's-distance deletion, and the earliest declared break
+date. Therefore the honest final statement is that the post-period slope is
+numerically more negative, while evidence for a discrete pandemic change is
+sensitive to defensible analysis choices.
+
+二次项在 HAC(5) 下联合显著，但二次模型的调优 RMSE 更差。训练集选出的
+Yeo-Johnson 参数接近 1，只带来很小的调优改善，也没有消除诊断拒绝，并削弱斜率
+的直接对冲比率解释。方向和“不完全对冲”结论稳定，但疫情斜率变化是否在 5%
+水平显著会随缩尾、Cook 距离删除和最早备选断点而改变。因此最终结论应写为：
+疫情后斜率在数值上更负，但“疫情造成离散改变”的统计证据对合理分析选择敏感。
+
+## Data quality and reproducibility / 数据质量与复现
+
+```{{r reproducibility-table, echo=FALSE}}
+knitr::kable(data_quality_audit, caption = "Machine-checked data and split audit")
+```
+
+The raw snapshots are hash-bound, every source has a deterministic CSV export,
+the processed variables have a machine-readable dictionary, and the repository
+stores a hash manifest for core artifacts. See `REPRODUCIBILITY.md` for the exact
+one-command workflow and interpretation limits.
+
+原始快照有 SHA-256 绑定，每个数据源都有确定性的 CSV 导出，处理后变量有机器可读
+字典，核心产物有完整哈希清单。具体一键复现方法见 `REPRODUCIBILITY.md`。
+
+## Generated visual evidence / 结果图形
 
 ```{{r generated-figures, echo=FALSE, out.width="95%", fig.align="center"}}
 figure_files <- file.path(figures_dir, c(
@@ -45,17 +140,26 @@ figure_files <- file.path(figures_dir, c(
   "hac_lag_sensitivity.png",
   "tuning_model_comparison.png",
   "heldout_test_predictions.png",
-  "residual_diagnostics.png"
+  "residual_diagnostics.png",
+  "robustness_sensitivity.png",
+  "influence_diagnostics.png"
 ))
 knitr::include_graphics(figure_files)
 ```
 
-## Interpretation boundary
+## Final conclusion / 最终结论
 
 OLS estimates the conditional slopes; Newey-West changes the covariance matrix,
 standard errors, confidence intervals, and p-values because the residuals are
 heteroskedastic and serially dependent. The pandemic coefficient is an
-associational structural-break estimate, not a causal COVID-19 effect.
+associational structural-break estimate, not a causal COVID-19 effect. The
+strongest reproducible conclusion is incomplete daily yen hedging in both
+periods. Evidence of a discrete post-pandemic change is not robust across all
+declared sensitivity analyses.
+
+OLS 估计条件斜率；Newey-West 针对异方差和序列相关调整标准误、置信区间与 p 值。
+疫情系数是相关性断点，不是 COVID-19 的因果效应。最稳健、可复现的结论是两个时期
+都存在不完全日元对冲；疫情后是否发生离散变化，不能在全部已声明敏感性分析下保持。
 '''
     TARGET.write_text(document, encoding="utf-8")
     print(f"Synchronized standalone Rmd: {TARGET}")

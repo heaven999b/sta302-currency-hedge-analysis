@@ -1,0 +1,14 @@
+variable,role,type,unit,construction,source,missing_value_policy
+date,index,date,calendar date,Common interval end date,"Yahoo Finance, FRED, Kenneth French",No missing dates retained after exact-interval merge
+Y,response,numeric,percentage points,"100 * [log(HEWJ_t/HEWJ_start) - log(EWJ_t/EWJ_start)]","Yahoo Finance HEWJ and EWJ adjusted closes",Complete cases only
+JPY_app,focal predictor,numeric,percentage points,"-100 * log(DEXJPUS_t/DEXJPUS_start); positive means yen appreciation",FRED DEXJPUS,Complete cases only
+Post,period indicator,factor,"Pre or Post","Pre through 2020-03-10; 2020-03-11 omitted; Post from 2020-03-12",WHO event date applied to market data,No missing values
+Nikkei_ret,control,numeric,percentage points,100 * log price change,FRED NIKKEI225,Complete cases only
+SMB,control,numeric,percentage points,Japan daily size factor,Kenneth French Data Library,Complete cases only
+HML,control,numeric,percentage points,Japan daily value factor,Kenneth French Data Library,Complete cases only
+RMW,control,numeric,percentage points,Japan daily profitability factor,Kenneth French Data Library,Complete cases only
+CMA,control,numeric,percentage points,Japan daily investment factor,Kenneth French Data Library,Complete cases only
+MOM,control,numeric,percentage points,Japan daily momentum factor,Kenneth French Data Library,Complete cases only
+dlog_VIX,control,numeric,percentage points,100 * log VIX change,FRED VIXCLS,Complete cases only
+rate_diff,control,numeric,percentage points,"U.S. minus Japan immediate/call-money rate; source month shifted to the following calendar month",FRED IRSTCI01USM156N and IRSTCI01JPM156N,Complete cases only
+split,evaluation label,factor,"train, tuning, or test",Fixed chronological 60/20/20 row split,Derived from ordered analysis table,Every row assigned exactly once

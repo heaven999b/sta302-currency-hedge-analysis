@@ -149,6 +149,135 @@ trailing_mean <- function(x, window = 20L) {
   as.numeric(stats::filter(x, rep(1 / window, window), sides = 1))
 }
 
+winsorize_vector <- function(x, probs = c(0.005, 0.995)) {
+  limits <- quantile(x, probs = probs, na.rm = TRUE, names = FALSE, type = 7)
+  pmin(pmax(x, limits[1]), limits[2])
+}
+
+yeo_johnson <- function(x, lambda) {
+  out <- numeric(length(x))
+  nonnegative <- x >= 0
+  if (abs(lambda) < 1e-10) {
+    out[nonnegative] <- log1p(x[nonnegative])
+  } else {
+    out[nonnegative] <- ((x[nonnegative] + 1)^lambda - 1) / lambda
+  }
+  if (abs(lambda - 2) < 1e-10) {
+    out[!nonnegative] <- -log1p(-x[!nonnegative])
+  } else {
+    out[!nonnegative] <- -(((1 - x[!nonnegative])^(2 - lambda) - 1) / (2 - lambda))
+  }
+  out
+}
+
+inverse_yeo_johnson <- function(z, lambda) {
+  out <- numeric(length(z))
+  nonnegative <- z >= 0
+  if (abs(lambda) < 1e-10) {
+    out[nonnegative] <- exp(z[nonnegative]) - 1
+  } else {
+    out[nonnegative] <- pmax(lambda * z[nonnegative] + 1, .Machine$double.eps)^(1 / lambda) - 1
+  }
+  if (abs(lambda - 2) < 1e-10) {
+    out[!nonnegative] <- 1 - exp(-z[!nonnegative])
+  } else {
+    out[!nonnegative] <- 1 - pmax(1 - (2 - lambda) * z[!nonnegative],
+                                  .Machine$double.eps)^(1 / (2 - lambda))
+  }
+  out
+}
+
+model_diagnostics <- function(model, bg_lag = 5L) {
+  e <- residuals(model)
+  X <- model.matrix(model)
+  n <- nrow(X); k <- ncol(X)
+  dw <- sum(diff(e)^2) / sum(e^2)
+  aux_bp <- lm(I(e^2) ~ X[, -1, drop = FALSE])
+  bp_stat <- n * summary(aux_bp)$r.squared
+  bp_df <- k - 1
+  bp_p <- pchisq(bp_stat, df = bp_df, lower.tail = FALSE)
+  bg_frame <- data.frame(e = e[(bg_lag + 1):n], X[(bg_lag + 1):n, -1, drop = FALSE])
+  for (ell in seq_len(bg_lag)) {
+    bg_frame[[paste0("lag", ell)]] <- e[(bg_lag + 1 - ell):(n - ell)]
+  }
+  bg_model <- lm(e ~ ., data = bg_frame)
+  bg_stat <- nrow(bg_frame) * summary(bg_model)$r.squared
+  bg_p <- pchisq(bg_stat, df = bg_lag, lower.tail = FALSE)
+  standardized <- (e - mean(e)) / sd(e)
+  jb_stat <- n / 6 * mean(standardized^3)^2 + n / 24 * (mean(standardized^4) - 3)^2
+  jb_p <- pchisq(jb_stat, df = 2, lower.tail = FALSE)
+  fitted_values <- fitted(model)
+  response <- model.response(model.frame(model))
+  augmented_fit <- lm.fit(cbind(X, fitted_values^2, fitted_values^3), response)
+  rss_base <- sum(e^2)
+  rss_augmented <- sum(augmented_fit$residuals^2)
+  reset_df <- 2L
+  reset_residual_df <- n - ncol(X) - reset_df
+  reset_f <- ((rss_base - rss_augmented) / reset_df) /
+    (rss_augmented / reset_residual_df)
+  reset_p <- pf(reset_f, df1 = reset_df, df2 = reset_residual_df, lower.tail = FALSE)
+  list(
+    durbin_watson = dw,
+    breusch_pagan_stat = bp_stat,
+    breusch_pagan_df = bp_df,
+    breusch_pagan_p = bp_p,
+    breusch_godfrey_lag5_stat = bg_stat,
+    breusch_godfrey_lag5_p = bg_p,
+    jarque_bera_stat = jb_stat,
+    jarque_bera_p = jb_p,
+    reset_f = reset_f,
+    reset_p = reset_p
+  )
+}
+
+joint_wald_test <- function(model, terms, vcov_matrix = vcov(model)) {
+  b <- coef(model)
+  stopifnot(all(terms %in% names(b)))
+  A <- matrix(0, nrow = length(terms), ncol = length(b),
+              dimnames = list(terms, names(b)))
+  for (j in seq_along(terms)) A[j, terms[j]] <- 1
+  estimate <- drop(A %*% b)
+  covariance <- A %*% vcov_matrix %*% t(A)
+  statistic <- drop(t(estimate) %*% solve(covariance, estimate))
+  data.frame(statistic = statistic, df = length(terms),
+             p_value = pchisq(statistic, df = length(terms), lower.tail = FALSE))
+}
+
+select_yeo_johnson_lambda <- function(data, formula_rhs, grid = seq(-2, 2, by = .05)) {
+  scores <- vapply(grid, function(lambda) {
+    transformed <- data
+    transformed$Y_yj <- yeo_johnson(transformed$Y, lambda)
+    model <- lm(as.formula(paste("Y_yj ~", formula_rhs)), data = transformed)
+    rss <- sum(residuals(model)^2)
+    jacobian <- (lambda - 1) * sum(log1p(data$Y[data$Y >= 0])) +
+      (1 - lambda) * sum(log1p(-data$Y[data$Y < 0]))
+    -nrow(data) / 2 * log(rss / nrow(data)) + jacobian
+  }, numeric(1))
+  data.frame(lambda = grid, profile_score = scores, selected = scores == max(scores))
+}
+
+summarize_fx_model <- function(model, analysis_name, data_used, note = "") {
+  vc <- newey_west(model, lag = 5)
+  interaction <- linear_test(model, setNames(1, "JPY_app:PostPost"), vcov_matrix = vc,
+                             label = "Newey-West HAC(5)")
+  pre <- linear_test(model, c(JPY_app = 1), null = -1, vcov_matrix = vc,
+                     label = "Newey-West HAC(5)")
+  post <- linear_test(model, setNames(c(1, 1), c("JPY_app", "JPY_app:PostPost")),
+                      null = -1, vcov_matrix = vc, label = "Newey-West HAC(5)")
+  data.frame(
+    analysis = analysis_name,
+    rows = nrow(data_used),
+    r_squared = summary(model)$r.squared,
+    pre_slope = pre$estimate,
+    pre_slope_vs_minus1_p = pre$p_value,
+    interaction = interaction$estimate,
+    interaction_hac5_p = interaction$p_value,
+    post_slope = post$estimate,
+    post_slope_vs_minus1_p = post$p_value,
+    note = note
+  )
+}
+
 ff5 <- read_french_daily(file.path(raw_dir, "Japan_5_Factors_Daily.csv"))
 mom <- read_french_daily(file.path(raw_dir, "Japan_MOM_Factor_Daily.csv"))
 names(mom)[names(mom) == "WML"] <- "MOM"
@@ -187,6 +316,7 @@ merged <- Reduce(function(x, y) merge(x, y, by = "date"),
 merged$rate_month <- month_floor(merged$date)
 merged <- merge(merged, rates, by = "rate_month", all.x = TRUE)
 merged <- merged[order(merged$date), ]
+merged_without_period <- merged
 
 merged$Post <- factor(ifelse(merged$date >= as.Date("2020-03-12"), "Post", "Pre"),
                       levels = c("Pre", "Post"))
@@ -289,24 +419,16 @@ alignment_model_sensitivity <- do.call(rbind, Map(function(alignment_name, model
 }, names(alignment_models), alignment_models))
 
 resid <- residuals(full_model)
-X <- model.matrix(full_model)
-n <- nrow(X); k <- ncol(X)
-dw <- sum(diff(resid)^2) / sum(resid^2)
-aux_bp <- lm(I(resid^2) ~ X[, -1, drop = FALSE])
-bp_stat <- n * summary(aux_bp)$r.squared
-bp_df <- k - 1
-bp_p <- pchisq(bp_stat, df = bp_df, lower.tail = FALSE)
-lag_order <- 5L
-bg_frame <- data.frame(e = resid[(lag_order + 1):n], X[(lag_order + 1):n, -1, drop = FALSE])
-for (ell in seq_len(lag_order)) bg_frame[[paste0("lag", ell)]] <- resid[(lag_order + 1 - ell):(n - ell)]
-bg_model <- lm(e ~ ., data = bg_frame)
-bg_stat <- nrow(bg_frame) * summary(bg_model)$r.squared
-bg_p <- pchisq(bg_stat, df = lag_order, lower.tail = FALSE)
-jb_stat <- n / 6 * (mean((resid - mean(resid))^3) / sd(resid)^3)^2 +
-  n / 24 * (mean((resid - mean(resid))^4) / sd(resid)^4 - 3)^2
-jb_p <- pchisq(jb_stat, df = 2, lower.tail = FALSE)
-reset_model <- update(full_model, . ~ . + I(fitted(full_model)^2) + I(fitted(full_model)^3))
-reset_anova <- anova(full_model, reset_model)
+n <- nobs(full_model)
+primary_diagnostics <- model_diagnostics(full_model)
+dw <- primary_diagnostics$durbin_watson
+bp_stat <- primary_diagnostics$breusch_pagan_stat
+bp_df <- primary_diagnostics$breusch_pagan_df
+bp_p <- primary_diagnostics$breusch_pagan_p
+bg_stat <- primary_diagnostics$breusch_godfrey_lag5_stat
+bg_p <- primary_diagnostics$breusch_godfrey_lag5_p
+jb_stat <- primary_diagnostics$jarque_bera_stat
+jb_p <- primary_diagnostics$jarque_bera_p
 cooks <- cooks.distance(full_model)
 
 # Strict chronological evaluation: 60% train, 20% tuning, 20% untouched test.
@@ -367,6 +489,167 @@ split_summary <- do.call(rbind, lapply(levels(analysis_data$split), function(spl
 stopifnot(max(train$date) < min(tuning$date), max(tuning$date) < min(test$date))
 stopifnot(!anyDuplicated(analysis_data$date))
 
+# Functional-form sensitivity. These alternatives are evaluated on the tuning
+# period only and do not reopen the already locked held-out test decision.
+full_rhs <- "JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"
+quadratic_formula <- Y ~ JPY_app * Post + I(JPY_app^2) * Post + Nikkei_ret +
+  SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff
+quadratic_train_model <- lm(quadratic_formula, data = train)
+quadratic_tuning_prediction <- predict(quadratic_train_model, newdata = tuning)
+quadratic_tuning_metrics <- prediction_metrics(tuning$Y, quadratic_tuning_prediction)
+quadratic_model <- lm(quadratic_formula, data = analysis_data)
+quadratic_diagnostics <- model_diagnostics(quadratic_model)
+quadratic_terms <- grep("I\\(JPY_app\\^2\\)", names(coef(quadratic_model)), value = TRUE)
+quadratic_wald <- joint_wald_test(quadratic_model, quadratic_terms,
+                                  newey_west(quadratic_model, lag = 5))
+
+lambda_profile <- select_yeo_johnson_lambda(train, full_rhs)
+selected_lambda <- lambda_profile$lambda[which.max(lambda_profile$profile_score)]
+train_yj <- train
+train_yj$Y_yj <- yeo_johnson(train_yj$Y, selected_lambda)
+yj_train_model <- lm(as.formula(paste("Y_yj ~", full_rhs)), data = train_yj)
+yj_tuning_prediction <- inverse_yeo_johnson(
+  predict(yj_train_model, newdata = tuning), selected_lambda
+)
+yj_tuning_metrics <- prediction_metrics(tuning$Y, yj_tuning_prediction)
+analysis_yj <- analysis_data
+analysis_yj$Y_yj <- yeo_johnson(analysis_yj$Y, selected_lambda)
+yj_model <- lm(as.formula(paste("Y_yj ~", full_rhs)), data = analysis_yj)
+yj_diagnostics <- model_diagnostics(yj_model)
+
+linear_tuning <- tuning_metrics[tuning_metrics$model == "Full factor model", ]
+functional_form_sensitivity <- rbind(
+  data.frame(
+    specification = "Primary linear response",
+    response_scale = "Original percentage-point return spread",
+    yeo_johnson_lambda = NA_real_, rows = nobs(full_model), parameters = length(coef(full_model)),
+    adjusted_r_squared = summary(full_model)$adj.r.squared,
+    tuning_RMSE_original_scale = linear_tuning$RMSE,
+    tuning_MAE_original_scale = linear_tuning$MAE,
+    reset_p = primary_diagnostics$reset_p,
+    breusch_pagan_p = primary_diagnostics$breusch_pagan_p,
+    breusch_godfrey_lag5_p = primary_diagnostics$breusch_godfrey_lag5_p,
+    jarque_bera_p = primary_diagnostics$jarque_bera_p,
+    nonlinear_terms_hac5_joint_p = NA_real_,
+    role = "Primary: directly interpretable hedge slope; held-out result remains locked"
+  ),
+  data.frame(
+    specification = "Quadratic yen sensitivity",
+    response_scale = "Original percentage-point return spread",
+    yeo_johnson_lambda = NA_real_, rows = nobs(quadratic_model), parameters = length(coef(quadratic_model)),
+    adjusted_r_squared = summary(quadratic_model)$adj.r.squared,
+    tuning_RMSE_original_scale = unname(quadratic_tuning_metrics["RMSE"]),
+    tuning_MAE_original_scale = unname(quadratic_tuning_metrics["MAE"]),
+    reset_p = quadratic_diagnostics$reset_p,
+    breusch_pagan_p = quadratic_diagnostics$breusch_pagan_p,
+    breusch_godfrey_lag5_p = quadratic_diagnostics$breusch_godfrey_lag5_p,
+    jarque_bera_p = quadratic_diagnostics$jarque_bera_p,
+    nonlinear_terms_hac5_joint_p = quadratic_wald$p_value,
+    role = "Sensitivity: hierarchy-preserving quadratic terms; tuning only"
+  ),
+  data.frame(
+    specification = "Yeo-Johnson response",
+    response_scale = "Yeo-Johnson transformed; inverse transformed for tuning metrics",
+    yeo_johnson_lambda = selected_lambda, rows = nobs(yj_model), parameters = length(coef(yj_model)),
+    adjusted_r_squared = summary(yj_model)$adj.r.squared,
+    tuning_RMSE_original_scale = unname(yj_tuning_metrics["RMSE"]),
+    tuning_MAE_original_scale = unname(yj_tuning_metrics["MAE"]),
+    reset_p = yj_diagnostics$reset_p,
+    breusch_pagan_p = yj_diagnostics$breusch_pagan_p,
+    breusch_godfrey_lag5_p = yj_diagnostics$breusch_godfrey_lag5_p,
+    jarque_bera_p = yj_diagnostics$jarque_bera_p,
+    nonlinear_terms_hac5_joint_p = NA_real_,
+    role = "Sensitivity: lambda selected on training data; slope loses direct hedge-ratio meaning"
+  )
+)
+
+# Influence sensitivity. Primary estimates retain every valid observation.
+continuous_variables <- c("Y", "JPY_app", "Nikkei_ret", "SMB", "HML", "RMW",
+                          "CMA", "MOM", "dlog_VIX", "rate_diff")
+winsorized_data <- analysis_data
+for (variable in continuous_variables) {
+  winsorized_data[[variable]] <- winsorize_vector(winsorized_data[[variable]])
+}
+winsorized_model <- lm(full_formula, data = winsorized_data)
+cooks_threshold <- 4 / nobs(full_model)
+cooks_retained <- cooks <= cooks_threshold
+cooks_trimmed_data <- analysis_data[cooks_retained, ]
+cooks_trimmed_model <- lm(full_formula, data = cooks_trimmed_data)
+influence_sensitivity <- rbind(
+  summarize_fx_model(full_model, "Primary: all valid observations", analysis_data,
+                     "Registered primary analysis"),
+  summarize_fx_model(winsorized_model, "Winsorized 0.5/99.5 percentiles", winsorized_data,
+                     "All continuous analysis variables winsorized; no rows removed"),
+  summarize_fx_model(cooks_trimmed_model, "Cook's D <= 4/n stress test", cooks_trimmed_data,
+                     "Post-hoc mechanical stress test; not a preferred estimate")
+)
+influence_audit <- data.frame(
+  date = analysis_data$date,
+  cooks_distance = as.numeric(cooks),
+  threshold_4_over_n = cooks_threshold,
+  flagged = cooks > cooks_threshold,
+  leverage = as.numeric(hatvalues(full_model)),
+  standardized_residual = as.numeric(rstandard(full_model)),
+  Y = analysis_data$Y,
+  JPY_app = analysis_data$JPY_app,
+  integrity_status = "Frozen-source hash and interval checks passed; retained in primary"
+)
+influence_audit <- influence_audit[order(influence_audit$cooks_distance, decreasing = TRUE), ]
+influence_audit$influence_rank <- seq_len(nrow(influence_audit))
+
+# Pandemic break sensitivity uses the same exact-interval rule and a fixed,
+# declared five-calendar-day window around the WHO date.
+break_dates <- as.Date(c("2020-03-06", "2020-03-11", "2020-03-16"))
+break_date_sensitivity <- do.call(rbind, lapply(break_dates, function(cut_date) {
+  candidate <- merged_without_period
+  candidate$Post <- factor(ifelse(candidate$date > cut_date, "Post", "Pre"),
+                           levels = c("Pre", "Post"))
+  candidate <- candidate[candidate$date != cut_date, ]
+  candidate <- candidate[complete.cases(candidate[, analysis_columns]), ]
+  exact_match <- candidate$Y_start == candidate$JPY_app_start &
+    candidate$Y_start == candidate$Nikkei_ret_start &
+    candidate$Y_start == candidate$dlog_VIX_start
+  candidate <- candidate[exact_match, analysis_columns]
+  candidate <- candidate[order(candidate$date), ]
+  model <- lm(full_formula, data = candidate)
+  summary_row <- summarize_fx_model(model, paste("Transition", cut_date), candidate,
+                                    "Date omitted; Post begins on the following calendar day")
+  summary_row$transition_date <- cut_date
+  summary_row$pre_rows <- sum(candidate$Post == "Pre")
+  summary_row$post_rows <- sum(candidate$Post == "Post")
+  summary_row
+}))
+
+data_quality_audit <- data.frame(
+  check = c("processed_rows", "date_unique", "date_strictly_increasing", "complete_analysis_fields",
+            "exact_return_interval", "train_before_tuning", "tuning_before_test",
+            "split_rows_cover_sample", "stochastic_steps"),
+  status = c(
+    nrow(analysis_data) == 2655L,
+    !anyDuplicated(analysis_data$date),
+    all(diff(analysis_data$date) > 0),
+    !anyNA(analysis_data[, c("date", continuous_variables, "Post", "split")]),
+    all(joint_interval_match[match(analysis_data$date, end_date_aligned$date)]),
+    max(train$date) < min(tuning$date),
+    max(tuning$date) < min(test$date),
+    sum(split_summary$rows) == nrow(analysis_data),
+    FALSE
+  ),
+  expected = c("2655", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "TRUE", "FALSE"),
+  detail = c(
+    paste(nrow(analysis_data), "rows"),
+    paste(length(unique(analysis_data$date)), "unique dates"),
+    paste(min(analysis_data$date), "to", max(analysis_data$date)),
+    paste("Missing values:", sum(is.na(analysis_data))),
+    "HEWJ/EWJ, FX, Nikkei and VIX return start/end dates agree",
+    paste(max(train$date), "<", min(tuning$date)),
+    paste(max(tuning$date), "<", min(test$date)),
+    paste(sum(split_summary$rows), "rows assigned once"),
+    "OLS, deterministic transformations and fixed chronological splits; seed not applicable"
+  )
+)
+stopifnot(all(data_quality_audit$status == (data_quality_audit$expected == "TRUE" | data_quality_audit$expected == "2655")))
+
 diagnostics <- data.frame(
   metric = c("observations", "start_date", "end_date", "pre_observations", "post_observations",
              "r_squared_full", "adjusted_r_squared_full", "r_squared_baseline", "residual_sigma",
@@ -379,7 +662,7 @@ diagnostics <- data.frame(
             summary(full_model)$r.squared, summary(full_model)$adj.r.squared,
             summary(baseline_model)$r.squared, summary(full_model)$sigma, dw,
             bp_stat, bp_df, bp_p, bg_stat, bg_p, jb_stat, jb_p,
-            reset_anova$F[2], reset_anova$`Pr(>F)`[2], max(vif_table$vif),
+            primary_diagnostics$reset_f, primary_diagnostics$reset_p, max(vif_table$vif),
             vif_table$term[which.max(vif_table$vif)], max(cooks), sum(cooks > 4 / n))
 )
 
@@ -406,8 +689,18 @@ write.csv(tuning_metrics, file.path(results_dir, "model_selection_tuning.csv"), 
 write.csv(test_metrics, file.path(results_dir, "heldout_test_metrics.csv"), row.names = FALSE)
 write.csv(test_predictions, file.path(results_dir, "heldout_test_predictions.csv"), row.names = FALSE)
 write.csv(test_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
+write.csv(functional_form_sensitivity, file.path(results_dir, "functional_form_sensitivity.csv"),
+          row.names = FALSE)
+write.csv(lambda_profile, file.path(results_dir, "yeo_johnson_lambda_profile.csv"), row.names = FALSE)
+write.csv(influence_sensitivity, file.path(results_dir, "influence_sensitivity.csv"), row.names = FALSE)
+write.csv(influence_audit, file.path(results_dir, "influence_audit.csv"), row.names = FALSE)
+write.csv(break_date_sensitivity, file.path(results_dir, "break_date_sensitivity.csv"), row.names = FALSE)
+write.csv(data_quality_audit, file.path(results_dir, "data_quality_audit.csv"), row.names = FALSE)
 saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5,
-             selected_model_name = selected_model_name, selected_model = selected_model),
+             selected_model_name = selected_model_name, selected_model = selected_model,
+             quadratic_model = quadratic_model, yeo_johnson_model = yj_model,
+             yeo_johnson_lambda = selected_lambda, winsorized_model = winsorized_model,
+             cooks_trimmed_model = cooks_trimmed_model),
         file.path(results_dir, "models.rds"))
 
 png(file.path(figures_dir, "fx_slope_by_period.png"), width = 1800, height = 1200, res = 180)
@@ -490,6 +783,61 @@ axis(2, at = seq_len(nrow(tab)), labels = tab$term, las = 1, cex.axis = .85)
 abline(v = 0, lty = 2, col = "grey45")
 dev.off()
 
+png(file.path(figures_dir, "robustness_sensitivity.png"), width = 1900, height = 1600, res = 180)
+par(mfrow = c(2, 2), mar = c(5, 4.4, 3, 1.2))
+functional_labels <- c("Linear", "Quadratic", sprintf("Yeo-Johnson\n(lambda=%.2f)", selected_lambda))
+functional_values <- functional_form_sensitivity$tuning_RMSE_original_scale
+functional_pos <- barplot(functional_values, names.arg = functional_labels,
+                          col = c("#1f6aa5", "#7aa6c2", "#a9b6c2"),
+                          ylab = "Tuning RMSE", main = "Functional-form comparison (tuning only)",
+                          ylim = c(0, max(functional_values) * 1.18))
+text(functional_pos, functional_values, sprintf("%.4f", functional_values), pos = 3, cex = .8)
+
+influence_labels <- c("Primary", "Winsorized", "Cook stress")
+plot(seq_along(influence_labels), influence_sensitivity$interaction,
+     xaxt = "n", pch = 19, cex = 1.1, col = "#1f6aa5",
+     xlim = c(.65, 3.35),
+     ylim = range(influence_sensitivity$interaction) + c(-.004, .004),
+     xlab = "", ylab = "JPY appreciation x Post estimate",
+     main = "Influence sensitivity")
+axis(1, at = seq_along(influence_labels), labels = influence_labels)
+abline(h = 0, lty = 2, col = "grey45")
+text(seq_along(influence_labels), influence_sensitivity$interaction,
+     labels = sprintf("p=%.3f", influence_sensitivity$interaction_hac5_p),
+     pos = c(4, 3, 2), offset = .45, cex = .78)
+
+plot(as.Date(break_date_sensitivity$transition_date), break_date_sensitivity$interaction,
+     type = "b", pch = 19, col = "#d94b36", xaxt = "n",
+     xlim = range(as.Date(break_date_sensitivity$transition_date)) + c(-2, 2),
+     ylim = range(break_date_sensitivity$interaction) + c(-.004, .004),
+     xlab = "Candidate transition date", ylab = "JPY appreciation x Post estimate",
+     main = "Pandemic-break sensitivity")
+axis.Date(1, at = as.Date(break_date_sensitivity$transition_date), format = "%b %d")
+abline(h = 0, lty = 2, col = "grey45")
+text(as.Date(break_date_sensitivity$transition_date), break_date_sensitivity$interaction,
+     labels = sprintf("p=%.3f", break_date_sensitivity$interaction_hac5_p),
+     pos = c(4, 3, 2), offset = .45, cex = .78)
+
+plot(lambda_profile$lambda, lambda_profile$profile_score, type = "l", lwd = 2,
+     col = "#1f6aa5", xlab = "Yeo-Johnson lambda", ylab = "Training profile score",
+     main = "Lambda selected without tuning/test leakage")
+abline(v = selected_lambda, lty = 2, col = "#d94b36", lwd = 2)
+text(selected_lambda, max(lambda_profile$profile_score), sprintf("lambda=%.2f", selected_lambda),
+     pos = 4, cex = .8)
+dev.off()
+
+png(file.path(figures_dir, "influence_diagnostics.png"), width = 1800, height = 1100, res = 180)
+plot(analysis_data$date, cooks, type = "h", col = adjustcolor("#1f6aa5", alpha.f = .7),
+     xlab = "Date", ylab = "Cook's distance", main = "Influence screening; primary model retains all dates")
+abline(h = cooks_threshold, lty = 2, col = "#d94b36", lwd = 2)
+top_indices <- order(cooks, decreasing = TRUE)[seq_len(min(6, length(cooks)))]
+text(analysis_data$date[top_indices], cooks[top_indices],
+     labels = format(analysis_data$date[top_indices], "%Y-%m-%d"),
+     pos = c(3, 2, 4, 3, 3, 3), offset = .5, cex = .72)
+legend("topright", legend = sprintf("4/n threshold = %.5f", cooks_threshold),
+       col = "#d94b36", lty = 2, lwd = 2, bty = "n")
+dev.off()
+
 log_lines <- c(
   paste("R version:", R.version.string),
   paste("jsonlite version:", as.character(packageVersion("jsonlite"))),
@@ -517,6 +865,18 @@ log_lines <- c(
   "",
   "Untouched held-out test:",
   paste(capture.output(print(test_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Functional-form sensitivity (tuning only; held-out decision not reopened):",
+  paste(capture.output(print(functional_form_sensitivity, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Influence sensitivity:",
+  paste(capture.output(print(influence_sensitivity, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Pandemic-break sensitivity:",
+  paste(capture.output(print(break_date_sensitivity, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Data-quality and reproducibility checks:",
+  paste(capture.output(print(data_quality_audit, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
   "R session information:",
   paste(capture.output(sessionInfo()), collapse = "\n")

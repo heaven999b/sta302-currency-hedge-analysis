@@ -1,4 +1,4 @@
-protocol_version: 2
+protocol_version: 3
 frozen_on: 2026-09-21
 research_question: "Does the HEWJ-minus-EWJ daily return spread offset yen appreciation, and did the conditional slope change after 2020-03-11?"
 data:
@@ -6,11 +6,29 @@ data:
   return_definition: "100 * log price difference"
   alignment: "compute within each native series, merge on end date, require identical interval start"
   pandemic_transition_date_excluded: 2020-03-11
+  raw_snapshots: "frozen under data/raw and verified by SHA-256 before analysis"
+  csv_exports: "deterministic copies under data/original_csv; Yahoo JSON is converted without changing observations"
 inference:
   estimator: OLS
   primary_covariance: "Newey-West HAC(5)"
   sensitivity_lags: [1, 10]
   alpha: 0.05
+robustness:
+  nonlinear:
+    quadratic: "add JPY_app^2 and JPY_app^2 x Post while preserving hierarchy"
+    yeo_johnson_lambda_grid: {minimum: -2.0, maximum: 2.0, step: 0.05}
+    yeo_johnson_selection: "maximum Gaussian regression likelihood with Jacobian on training data only"
+    decision_rule: "diagnostic/tuning sensitivity only; do not reopen the already locked primary held-out test"
+  influence:
+    primary_policy: "retain every valid observation"
+    winsorization: "0.5th/99.5th percentiles for Y and all continuous predictors"
+    cooks_stress_test: "mechanically exclude Cook's D > 4/n only as a labelled post-hoc stress test"
+    source_error_policy: "exclude only a confirmed source/data error; none may be removed for significance"
+  break_dates:
+    - 2020-03-06
+    - 2020-03-11
+    - 2020-03-16
+    rule: "for each candidate, omit that date and define Post as dates strictly after it"
 prediction:
   role: secondary
   split: chronological

@@ -17,10 +17,23 @@ Private, reproducible course project studying whether the daily return spread be
 | Interaction p, HAC(5) / HAC(5) p 值 | 0.10439 |
 | Implied post-period slope / 疫情后隐含斜率 | -0.912143 |
 | Held-out test RMSE / 留出测试 RMSE | 0.3116 vs 0.6532 mean benchmark |
+| Quadratic terms, HAC(5) joint p / 二次项联合 p 值 | 0.02880 |
+| Yeo-Johnson lambda / Yeo-Johnson 参数 | 0.95, selected on train only |
+| Break-window interaction p / 断点窗口交互 p 值 | 0.03028–0.15997 |
 
 The pandemic interaction is significant with conventional OLS standard errors but not with Newey-West HAC(5). Both period-specific slopes remain significantly different from the complete-hedge benchmark of -1 under HAC(5), supporting incomplete hedging in both periods. The break is associational, not causal.
 
 疫情交互项在经典 OLS 标准误下显著，但使用 Newey-West HAC(5) 后不显著。两个时期的斜率在 HAC(5) 下仍显著不同于完全对冲基准 -1，因此支持“两时期均存在不完全对冲”；断点只作相关性解释，不作因果解释。
+
+The nonlinear, influence, and break-date analyses are now complete. The
+interaction remains negative, but its 5% significance changes under
+winsorization, Cook's-distance deletion, and alternative declared break dates.
+The robust conclusion is incomplete hedging in both periods; a discrete pandemic
+change is not stable across reasonable specifications.
+
+非线性、影响点与断点日期分析均已完成。交互项方向始终为负，但其 5% 显著性会随
+缩尾、Cook 距离删除和备选断点改变。稳健结论是两个时期都存在不完全对冲，不能稳健
+声称疫情造成了离散结构变化。
 
 ## Strict workflow / 严格实验流程
 
@@ -28,7 +41,10 @@ The pandemic interaction is significant with conventional OLS standard errors bu
 2. The primary sample keeps only rows sharing the same return start and end dates across HEWJ/EWJ, USD/JPY, Nikkei 225, and VIX; a same-end-date-only sample is reported separately as sensitivity analysis.
 3. The inferential model is prespecified and fit by OLS. Because residuals are not iid, primary inference uses Newey-West HAC(5), with HAC(1) and HAC(10) sensitivity checks.
 4. Prediction is secondary and uses a fixed chronological 60% train / 20% tuning / 20% untouched test split. Candidate models are selected by tuning RMSE, then refit on train+tuning and evaluated once on test.
-5. No random shuffling, test-set tuning, row deletion based on results, or stochastic training is used. OLS is deterministic, so repeated random seeds are not applicable.
+5. A quadratic yen model and a Yeo-Johnson response are evaluated on training/tuning only; the already locked test-set decision is not reopened.
+6. The primary model keeps all valid observations. Winsorization and Cook's-distance deletion are labelled sensitivity/stress tests, not replacements chosen by significance.
+7. March 6, March 11, and March 16, 2020 are evaluated as a declared break window without selecting the lowest p-value.
+8. No random shuffling, test-set tuning, or stochastic training is used. OLS is deterministic, so repeated random seeds are not applicable.
 
 The held-out exercise measures conditional fit using same-day observed predictors; it is not an ahead-of-time trading forecast.
 
@@ -55,6 +71,10 @@ The held-out exercise measures conditional fit using same-day observed predictor
 
 ![Residual diagnostics](figures/residual_diagnostics.png)
 
+![Robustness sensitivity](figures/robustness_sensitivity.png)
+
+![Influence diagnostics](figures/influence_diagnostics.png)
+
 ## Repository architecture / 仓库架构
 
 ```text
@@ -64,6 +84,9 @@ The held-out exercise measures conditional fit using same-day observed predictor
 │   └── STA302_Project_Analysis.Rmd     # course-facing reproducibility entry
 ├── data/
 │   ├── raw/                            # frozen source snapshots + SHA-256
+│   ├── original_csv/                   # deterministic CSV exports of all sources
+│   ├── DATA_DICTIONARY.csv             # processed-field definitions
+│   ├── SOURCE_MANIFEST.csv             # machine-readable source provenance
 │   └── processed/                      # cleaned modeling table
 ├── docs/proposal/
 │   ├── STA302_Research_Proposal_EN.md  # official English proposal
@@ -91,6 +114,7 @@ The held-out exercise measures conditional fit using same-day observed predictor
 │   └── proposal/                       # official English PDF
 ├── SOURCE_MANIFEST.md
 ├── DATA_USE.md
+├── REPRODUCIBILITY.md
 └── environment.yml
 ```
 
@@ -112,13 +136,15 @@ bash scripts/run_all.sh
 This command:
 
 1. verifies all seven frozen raw-file SHA-256 hashes;
-2. reruns interval-aligned cleaning, OLS, HAC inference, diagnostics, figures, and chronological validation in R;
-3. executes end-to-end tests for leakage controls, split order, model-selection lock, conclusions, and artifacts;
-4. knits the Rmd to a self-contained HTML file;
-5. rebuilds the official English and bilingual proposal PDFs;
-6. prepares an all-CSV Quercus staging package; and
-7. knits the staged CSV-only submission again in an isolated temporary directory;
-8. checks the expected rows, dates, coefficients, outputs, Rmd completeness, and PDF text.
+2. exports every original source as CSV with source and export hashes;
+3. reruns interval-aligned cleaning, OLS, HAC inference, diagnostics, nonlinear, influence, break-date, figure, and chronological validation in R;
+4. executes end-to-end tests for leakage controls, split order, model-selection lock, sensitivity conclusions, and artifacts;
+5. knits the Rmd to a self-contained bilingual HTML report;
+6. rebuilds the official English, Chinese, and bilingual proposal PDFs;
+7. prepares an all-CSV Quercus staging package;
+8. knits the staged CSV-only submission again in an isolated temporary directory;
+9. hashes all core research artifacts; and
+10. checks the expected rows, dates, coefficients, robustness outputs, Rmd completeness, and PDF text.
 
 该命令会验证七份原始文件、重新运行完整 R 分析、渲染 Rmd、重建中英双语 PDF，并检查关键数值和输出是否一致。
 
@@ -135,6 +161,18 @@ This command:
 - `docs/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
 - `results/model_selection_tuning.csv` and `results/heldout_test_metrics.csv` - tuning and untouched-test evidence.
 - `results/data_alignment_audit.csv` and `results/data_alignment_sensitivity.csv` - date-interval audit and robustness result.
+- `results/functional_form_sensitivity.csv` - quadratic and Yeo-Johnson checks without reopening test selection.
+- `results/influence_audit.csv` and `results/influence_sensitivity.csv` - row-level influence audit and declared stress tests.
+- `results/break_date_sensitivity.csv` - fixed-window cutoff sensitivity.
+- `results/data_quality_audit.csv` and `results/ARTIFACT_MANIFEST.csv` - machine-readable reproducibility evidence.
+
+The proposal PDFs remain the Part 1 proposal and therefore describe the
+robustness work as planned. Completed final-project evidence is reported in the
+HTML analysis and `docs/RESULTS_AND_CONCLUSIONS.md`; the original proposal is not
+silently rewritten after results are known.
+
+提案 PDF 保留为第一部分提案，因此仍以“计划”表述后续稳健性工作。完成后的最终证据
+位于 HTML 分析报告和 `docs/RESULTS_AND_CONCLUSIONS.md`，不在看到结果后反向改写原提案。
 
 ## Data and integrity / 数据与诚信
 

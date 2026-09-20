@@ -1,6 +1,6 @@
 R version: R version 4.4.3 (2025-02-28)
 jsonlite version: 2.0.0
-Run time UTC: 2026-09-20 19:08:32 UTC
+Run time UTC: 2026-09-20 19:42:41 UTC
 Rows: 2655
 Date range: 2014-02-06 to 2026-07-31
 Pre/Post rows: 1304 / 1351
@@ -104,6 +104,98 @@ Untouched held-out test:
  2026-07-31
  2026-07-31
  2026-07-31
+
+Functional-form sensitivity (tuning only; held-out decision not reopened):
+             specification
+   Primary linear response
+ Quadratic yen sensitivity
+      Yeo-Johnson response
+                                                  response_scale
+                         Original percentage-point return spread
+                         Original percentage-point return spread
+ Yeo-Johnson transformed; inverse transformed for tuning metrics
+ yeo_johnson_lambda rows parameters adjusted_r_squared
+                 NA 2655         12          0.7025861
+                 NA 2655         14          0.7051035
+               0.95 2655         12          0.7041155
+ tuning_RMSE_original_scale tuning_MAE_original_scale        reset_p
+                  0.3074665                 0.2145787 0.000850604718
+                  0.3111081                 0.2180925 0.000060384818
+                  0.3045090                 0.2140376 0.000000488713
+ breusch_pagan_p
+  0.008246984521
+  0.000000229308
+  0.002639095343
+                                                                                                                          breusch_godfrey_lag5_p
+ 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002411044
+ 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090207298210
+ 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011634130
+ jarque_bera_p nonlinear_terms_hac5_joint_p
+             0                           NA
+             0                   0.02880338
+             0                           NA
+                                                                                  role
+           Primary: directly interpretable hedge slope; held-out result remains locked
+                        Sensitivity: hierarchy-preserving quadratic terms; tuning only
+ Sensitivity: lambda selected on training data; slope loses direct hedge-ratio meaning
+
+Influence sensitivity:
+                        analysis rows r_squared  pre_slope
+ Primary: all valid observations 2655 0.7038188 -0.8509364
+ Winsorized 0.5/99.5 percentiles 2655 0.7065311 -0.8239013
+     Cook's D <= 4/n stress test 2521 0.7866628 -0.8459193
+          pre_slope_vs_minus1_p interaction interaction_hac5_p post_slope
+ 0.0000049538645435766438701358 -0.06120642        0.104391107 -0.9121429
+ 0.0000000000063320052242944843 -0.08499203        0.004894852 -0.9088933
+ 0.0000000000000000000004410491 -0.04877883        0.011206019 -0.8946981
+       post_slope_vs_minus1_p
+ 0.00004804795628009109285245
+ 0.00000002878195593710144938
+ 0.00000000000000000005335986
+                                                          note
+                                   Registered primary analysis
+ All continuous analysis variables winsorized; no rows removed
+     Post-hoc mechanical stress test; not a preferred estimate
+
+Pandemic-break sensitivity:
+              analysis rows r_squared  pre_slope pre_slope_vs_minus1_p
+ Transition 2020-03-06 2655 0.7017768 -0.8335077      0.00000009445087
+ Transition 2020-03-11 2655 0.7038188 -0.8509364      0.00000495386454
+ Transition 2020-03-16 2655 0.7004195 -0.8534248      0.00000578657243
+ interaction interaction_hac5_p post_slope post_slope_vs_minus1_p
+ -0.08511854         0.03028429 -0.9186263          0.00032305470
+ -0.06120642         0.10439111 -0.9121429          0.00004804796
+ -0.05042861         0.15997248 -0.9038534          0.00000020493
+                                                    note transition_date
+ Date omitted; Post begins on the following calendar day      2020-03-06
+ Date omitted; Post begins on the following calendar day      2020-03-11
+ Date omitted; Post begins on the following calendar day      2020-03-16
+ pre_rows post_rows
+     1301      1354
+     1304      1351
+     1307      1348
+
+Data-quality and reproducibility checks:
+                    check status expected
+           processed_rows   TRUE     2655
+              date_unique   TRUE     TRUE
+ date_strictly_increasing   TRUE     TRUE
+ complete_analysis_fields   TRUE     TRUE
+    exact_return_interval   TRUE     TRUE
+      train_before_tuning   TRUE     TRUE
+       tuning_before_test   TRUE     TRUE
+  split_rows_cover_sample   TRUE     TRUE
+         stochastic_steps  FALSE    FALSE
+                                                                                 detail
+                                                                              2655 rows
+                                                                      2655 unique dates
+                                                               2014-02-06 to 2026-07-31
+                                                                      Missing values: 0
+                              HEWJ/EWJ, FX, Nikkei and VIX return start/end dates agree
+                                                                2021-07-20 < 2021-07-21
+                                                                2024-01-23 < 2024-01-24
+                                                                2655 rows assigned once
+ OLS, deterministic transformations and fixed chronological splits; seed not applicable
 
 R session information:
 R version 4.4.3 (2025-02-28)
