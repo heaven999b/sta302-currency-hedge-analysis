@@ -3,7 +3,7 @@
 ## A Multi-Factor Study of HEWJ versus EWJ Before and After the COVID-19 Break
 
 **Course:** STA302 Final Project — Part 1  
-**Prepared:** September 20, 2026  
+**Prepared:** September 21, 2026  
 **Group members:** Haiwen Yi; **[add all other members before submission]**
 
 ## Contribution statement
@@ -29,11 +29,11 @@ The results would benefit U.S.-dollar investors, portfolio managers, and risk te
 
 ## Data description (276 words)
 
-The analysis contains 2,753 complete daily observations from February 6, 2014, through July 31, 2026. Yahoo Finance distributes histories assembled from market quotations and corporate actions for investment analysis; we use adjusted closes for HEWJ and EWJ. FRED redistributes official and market series for economic research: DEXJPUS is the Federal Reserve's noon New York yen-per-dollar quote; the Nikkei 225, VIX, and short-term rates represent equity, expected volatility, and monetary conditions. Kenneth French's Data Library constructs research portfolios from security returns using published factor definitions; we use its Japan five-factor and momentum series.
+The analysis contains 2,655 exact-interval daily observations from February 6, 2014, through July 31, 2026. Yahoo Finance distributes histories assembled from market quotations and corporate actions for investment analysis; we use adjusted closes for HEWJ and EWJ. FRED redistributes official and market series for economic research: DEXJPUS is the Federal Reserve's noon New York yen-per-dollar quote; the Nikkei 225, VIX, and short-term rates represent equity, expected volatility, and monetary conditions. Kenneth French's Data Library constructs research portfolios from security returns using published factor definitions; we use its Japan five-factor and momentum series.
 
-The response, the daily HEWJ-minus-EWJ log-return spread, has mean 0.0206 percentage points, standard deviation 0.6271, and range -4.3097 to 3.7826. It is continuous and can take either sign, making a Gaussian linear conditional mean interpretable. Daily observations are temporally ordered rather than strictly independent, so independence is explicitly assessed in the residual analysis and no causal interpretation is made.
+The response, the daily HEWJ-minus-EWJ log-return spread, has mean 0.0180 percentage points, standard deviation 0.6243, and range -4.3097 to 3.7826. It is continuous and can take either sign, making a Gaussian linear conditional mean interpretable. Daily observations are temporally ordered rather than strictly independent, so independence is explicitly assessed in the residual analysis and no causal interpretation is made.
 
-Table 1 summarizes the response and every predictor. Extreme daily movements appear in the response, Nikkei return, momentum, and VIX change; the rate differential is slow-moving because monthly observations are carried forward with a one-month lag. `Post` has 1,348 pre-period and 1,405 post-period observations. Complete cases are retained after joining by trading date.
+Table 1 summarizes the response and every predictor. Extreme daily movements appear in the response, Nikkei return, momentum, and VIX change; the rate differential is slow-moving because monthly observations are carried forward with a one-month lag. `Post` has 1,304 pre-period and 1,351 post-period observations. Each price return is computed on its native calendar before merging, and the primary sample requires a shared return interval.
 
 The model includes yen appreciation, `Post`, Nikkei return, SMB, HML, RMW, CMA, MOM, log VIX change, and the lagged U.S.-Japan rate differential. The `JPYapp × Post` interaction directly answers whether the conditional yen slope differs across the pandemic break. The split is substantively pre-specified from the WHO announcement rather than chosen by searching for the smallest p-value. Data websites and complete citations appear below.
 
@@ -53,11 +53,11 @@ The full ordinary least-squares model is
 Y(t) = b0 + b1 JPYapp(t) + b2 Post(t) + b3 [JPYapp(t) x Post(t)] + g'Z(t) + e(t),
 \]
 
-where \(Z_t\) contains the eight market and factor controls. Table 2 reports every coefficient with a classical standard error and 95% confidence interval. The model explains 71.21% of daily spread variation (adjusted \(R^2=71.10\%\)). The pre-period yen slope is -0.852 (SE 0.0178; 95% CI [-0.887, -0.817]). Thus, conditional on the controls, a one-percentage-point yen appreciation is associated with a 0.852-percentage-point lower HEWJ-minus-EWJ return. The interaction is -0.0648 (SE 0.0227; p = 0.0043), giving an implied post-period slope of -0.917. The period level shift is not significant. VIX log change is negative; most other controls are imprecisely estimated.
+where \(Z_t\) contains the eight market and factor controls. Table 2 reports every coefficient with a classical standard error and 95% confidence interval. The model explains 70.38% of daily spread variation (adjusted \(R^2=70.26\%\)). The pre-period yen slope is -0.851 (SE 0.0184; 95% CI [-0.887, -0.815]). Thus, conditional on the controls, a one-percentage-point yen appreciation is associated with a 0.851-percentage-point lower HEWJ-minus-EWJ return. The interaction is -0.0612 (SE 0.0235; p = 0.0093), giving an implied post-period slope of -0.912. The period level shift is not significant. VIX log change is negative; most other controls are imprecisely estimated.
 
 The strong negative currency slope is consistent with Hau and Rey's joint currency-equity mechanism and with the hedge interpretation. Its departure from exactly -1 agrees with Campbell et al.'s result that effective hedges need not be mechanical one-for-one positions. The mostly small factor coefficients suggest that pairing HEWJ with EWJ removes much common equity exposure, while retaining Fama-French controls prevents that conclusion from being assumed. The changed slope is directionally compatible with Shank and Vianna's evidence of time-varying currency-hedged ETF dynamics, although our pandemic comparison is not causal.
 
-Figure 2 provides the complete preliminary diagnostic grid. Residuals versus fitted values show no dominant smooth curve, but the RESET test rejects exact functional form (p = 0.001), so linearity remains questionable. Residual spread changes across fitted values and the Breusch-Pagan test rejects constant variance (p = 0.0048). The Q-Q plot has heavy tails and Jarque-Bera rejects normality (p < 0.001). Residuals over time and the ACF show dependence; the five-lag Breusch-Godfrey test rejects independence (p < 0.001), and Durbin-Watson is 2.85. The maximum VIF is 3.55, so severe multicollinearity is not evident. There are 137 cases above the Cook's-distance screening threshold \(4/n\), with maximum 0.136, indicating influential observations for later investigation.
+Figure 2 provides the complete preliminary diagnostic grid. Residuals versus fitted values show no dominant smooth curve, but the RESET test rejects exact functional form (p < 0.001), so linearity remains questionable. Residual spread changes across fitted values and the Breusch-Pagan test rejects constant variance (p = 0.0082). The Q-Q plot has heavy tails and Jarque-Bera rejects normality (p < 0.001). Residuals over time and the ACF show dependence; the five-lag Breusch-Godfrey test rejects independence (p < 0.001), and Durbin-Watson is 2.83. The maximum VIF is 3.56, so severe multicollinearity is not evident. There are 134 cases above the Cook's-distance screening threshold \(4/n\), with maximum 0.142, indicating influential observations for later investigation.
 
 These are preliminary OLS results. In accordance with the Part 1 instruction, we diagnose but do not correct violations here; robust inference and sensitivity analysis are deferred to the final project.
 
@@ -69,7 +69,7 @@ After every material specification change, we will recheck residual-versus-fitte
 
 Influential dates will be documented before any sensitivity run. The primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and the exclusion of individually justified data errors, if any. Once a final functional form is chosen, classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will also vary the pandemic cut within a small declared window rather than search all dates.
 
-Prediction remains secondary. A chronological 80/20 split will train on earlier dates and evaluate later dates against a historical-mean benchmark using RMSE and MAE. No random cross-validation will be used. The frozen raw files, cleaned CSV, code, and outputs will be versioned together.
+Prediction remains secondary. A fixed chronological 60/20/20 split will fit candidates on earlier training dates, select by tuning RMSE, and evaluate the locked choice once on the untouched test period against historical-mean and zero-return benchmarks. No random cross-validation or test-set tuning will be used. The frozen raw files, cleaned CSV, code, and outputs will be versioned together.
 
 The schedule in Table 3 assigns analysis, poster, and recording milestones. Member placeholders will be replaced with names from the signed Teamwork Agreement before submission.
 

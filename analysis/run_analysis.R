@@ -9,10 +9,14 @@ locate_project_dir <- function() {
   } else {
     NA_character_
   }
-  candidates <- unique(c(script_candidate, getwd(), file.path(getwd(), "..")))
+  candidates <- unique(c(script_candidate, getwd(), file.path(getwd(), ".."),
+                         file.path(getwd(), "..", "..")))
   candidates <- candidates[!is.na(candidates)]
   for (candidate in candidates) {
-    if (file.exists(file.path(candidate, "data", "raw", "Yahoo_HEWJ_chart.json"))) {
+    repo_input <- file.exists(file.path(candidate, "data", "raw", "Yahoo_HEWJ_chart.json"))
+    submission_input <- file.exists(file.path(candidate, "data", "original",
+                                               "Yahoo_HEWJ_original_export.csv"))
+    if (repo_input || submission_input) {
       return(normalizePath(candidate, mustWork = TRUE))
     }
   }
@@ -20,8 +24,9 @@ locate_project_dir <- function() {
 }
 
 project_dir <- locate_project_dir()
-raw_dir <- file.path(project_dir, "data", "raw")
-processed_dir <- file.path(project_dir, "data", "processed")
+repo_mode <- file.exists(file.path(project_dir, "data", "raw", "Yahoo_HEWJ_chart.json"))
+raw_dir <- if (repo_mode) file.path(project_dir, "data", "raw") else file.path(project_dir, "data", "original")
+processed_dir <- if (repo_mode) file.path(project_dir, "data", "processed") else file.path(project_dir, "data", "cleaned")
 results_dir <- file.path(project_dir, "results")
 figures_dir <- file.path(project_dir, "figures")
 
@@ -39,17 +44,36 @@ read_french_daily <- function(path) {
 }
 
 read_yahoo_adjusted <- function(path, value_name) {
-  payload <- jsonlite::fromJSON(path)
-  result <- payload$chart$result
-  timestamps <- result$timestamp[[1]]
-  adjusted <- result$indicators$adjclose[[1]]$adjclose[[1]]
-  stopifnot(length(timestamps) == length(adjusted))
-  out <- data.frame(
-    date = as.Date(as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")),
-    value = as.numeric(adjusted)
-  )
+  if (grepl("\\.json$", path, ignore.case = TRUE)) {
+    payload <- jsonlite::fromJSON(path)
+    result <- payload$chart$result
+    timestamps <- result$timestamp[[1]]
+    adjusted <- result$indicators$adjclose[[1]]$adjclose[[1]]
+    stopifnot(length(timestamps) == length(adjusted))
+    out <- data.frame(
+      date = as.Date(as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")),
+      value = as.numeric(adjusted)
+    )
+  } else {
+    exported <- read.csv(path, check.names = FALSE)
+    stopifnot(all(c("date", "adjusted_close") %in% names(exported)))
+    out <- data.frame(date = as.Date(exported$date), value = as.numeric(exported$adjusted_close))
+  }
   names(out)[2] <- value_name
   out[!is.na(out[[value_name]]), , drop = FALSE]
+}
+
+native_log_return <- function(data, value_name, return_name, sign = 1) {
+  data <- data[!is.na(data[[value_name]]) & data[[value_name]] > 0, c("date", value_name)]
+  data <- data[order(data$date), ]
+  stopifnot(!anyDuplicated(data$date), nrow(data) >= 2L)
+  out <- data.frame(
+    date = data$date[-1],
+    interval_start = data$date[-nrow(data)],
+    value = sign * 100 * diff(log(data[[value_name]]))
+  )
+  names(out)[2:3] <- c(paste0(return_name, "_start"), return_name)
+  out
 }
 
 month_floor <- function(x) as.Date(format(x, "%Y-%m-01"))
@@ -117,11 +141,21 @@ manual_vif <- function(model) {
   data.frame(term = colnames(X), vif = vals, row.names = NULL)
 }
 
+prediction_metrics <- function(actual, predicted) {
+  c(RMSE = sqrt(mean((actual - predicted)^2)), MAE = mean(abs(actual - predicted)))
+}
+
+trailing_mean <- function(x, window = 20L) {
+  as.numeric(stats::filter(x, rep(1 / window, window), sides = 1))
+}
+
 ff5 <- read_french_daily(file.path(raw_dir, "Japan_5_Factors_Daily.csv"))
 mom <- read_french_daily(file.path(raw_dir, "Japan_MOM_Factor_Daily.csv"))
 names(mom)[names(mom) == "WML"] <- "MOM"
-hewj <- read_yahoo_adjusted(file.path(raw_dir, "Yahoo_HEWJ_chart.json"), "HEWJ")
-ewj <- read_yahoo_adjusted(file.path(raw_dir, "Yahoo_EWJ_chart.json"), "EWJ")
+yahoo_hewj_path <- file.path(raw_dir, if (repo_mode) "Yahoo_HEWJ_chart.json" else "Yahoo_HEWJ_original_export.csv")
+yahoo_ewj_path <- file.path(raw_dir, if (repo_mode) "Yahoo_EWJ_chart.json" else "Yahoo_EWJ_original_export.csv")
+hewj <- read_yahoo_adjusted(yahoo_hewj_path, "HEWJ")
+ewj <- read_yahoo_adjusted(yahoo_ewj_path, "EWJ")
 
 fx <- read.csv(file.path(raw_dir, "FRED_DEXJPUS_daily.csv"), na.strings = c("", "."))
 names(fx)[1] <- "date"; fx$date <- as.Date(fx$date)
@@ -133,31 +167,61 @@ rates$rate_diff <- rates$IRSTCI01USM156N - rates$IRSTCI01JPM156N
 rates$rate_month <- next_month(rates$month)
 rates <- rates[, c("rate_month", "rate_diff")]
 
-merged <- merge(hewj, ewj, by = "date")
-for (frame in list(fx, market, ff5, mom)) merged <- merge(merged, frame, by = "date")
+# Each price series is transformed on its own native calendar before any merge.
+# This prevents a missing observation in one source from silently changing another
+# source's return interval.
+hewj_ret <- native_log_return(hewj, "HEWJ", "HEWJ_ret")
+ewj_ret <- native_log_return(ewj, "EWJ", "EWJ_ret")
+fx_ret <- native_log_return(fx, "DEXJPUS", "JPY_app", sign = -1)
+nikkei_ret <- native_log_return(market[, c("date", "NIKKEI225")], "NIKKEI225", "Nikkei_ret")
+vix_ret <- native_log_return(market[, c("date", "VIXCLS")], "VIXCLS", "dlog_VIX")
+
+etf_returns <- merge(hewj_ret, ewj_ret, by = "date")
+etf_returns <- etf_returns[etf_returns$HEWJ_ret_start == etf_returns$EWJ_ret_start, ]
+etf_returns$Y <- etf_returns$HEWJ_ret - etf_returns$EWJ_ret
+names(etf_returns)[names(etf_returns) == "HEWJ_ret_start"] <- "Y_start"
+etf_returns <- etf_returns[, c("date", "Y_start", "Y")]
+
+merged <- Reduce(function(x, y) merge(x, y, by = "date"),
+                 list(etf_returns, fx_ret, nikkei_ret, vix_ret, ff5, mom))
 merged$rate_month <- month_floor(merged$date)
 merged <- merge(merged, rates, by = "rate_month", all.x = TRUE)
 merged <- merged[order(merged$date), ]
 
-merged$Y <- c(NA_real_, 100 * diff(log(merged$HEWJ)) - 100 * diff(log(merged$EWJ)))
-merged$JPY_app <- c(NA_real_, -100 * diff(log(merged$DEXJPUS)))
-merged$Nikkei_ret <- c(NA_real_, 100 * diff(log(merged$NIKKEI225)))
-merged$dlog_VIX <- c(NA_real_, 100 * diff(log(merged$VIXCLS)))
 merged$Post <- factor(ifelse(merged$date >= as.Date("2020-03-12"), "Post", "Pre"),
                       levels = c("Pre", "Post"))
 merged <- merged[merged$date != as.Date("2020-03-11"), ]
 
 analysis_columns <- c("date", "Y", "JPY_app", "Post", "Nikkei_ret", "SMB", "HML",
                       "RMW", "CMA", "MOM", "dlog_VIX", "rate_diff")
-analysis_data <- merged[complete.cases(merged[, analysis_columns]), analysis_columns]
+end_date_aligned <- merged[complete.cases(merged[, analysis_columns]), ]
+joint_interval_match <- end_date_aligned$Y_start == end_date_aligned$JPY_app_start &
+  end_date_aligned$Y_start == end_date_aligned$Nikkei_ret_start &
+  end_date_aligned$Y_start == end_date_aligned$dlog_VIX_start
+analysis_data <- end_date_aligned[joint_interval_match, analysis_columns]
 analysis_data <- analysis_data[order(analysis_data$date), ]
 stopifnot(nrow(analysis_data) >= 1000L)
 stopifnot(nlevels(analysis_data$Post) == 2L)
+
+alignment_audit <- data.frame(
+  series = c("JPY_app", "Nikkei_ret", "dlog_VIX"),
+  native_return_rows = c(nrow(fx_ret), nrow(nikkei_ret), nrow(vix_ret)),
+  candidate_rows_aligned_by_end_date = nrow(end_date_aligned),
+  exact_interval_start_matches_Y = c(
+    sum(end_date_aligned$JPY_app_start == end_date_aligned$Y_start),
+    sum(end_date_aligned$Nikkei_ret_start == end_date_aligned$Y_start),
+    sum(end_date_aligned$dlog_VIX_start == end_date_aligned$Y_start)
+  ),
+  final_joint_interval_rows = nrow(analysis_data)
+)
+alignment_audit$differing_interval_start <-
+  alignment_audit$candidate_rows_aligned_by_end_date - alignment_audit$exact_interval_start_matches_Y
 
 full_formula <- Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff
 baseline_formula <- Y ~ JPY_app * Post
 full_model <- lm(full_formula, data = analysis_data)
 baseline_model <- lm(baseline_formula, data = analysis_data)
+end_date_only_model <- lm(full_formula, data = end_date_aligned)
 
 vcov_hac5 <- newey_west(full_model, lag = 5)
 coef_classic <- coefficient_table(full_model)
@@ -181,6 +245,49 @@ post_slope_hac <- linear_test(full_model, setNames(c(1, 1), c("JPY_app", interac
 post_slope_hac$period <- "Post-pandemic"; post_slope_hac$hypothesis <- "FX slope = -1"
 hypothesis_tests <- rbind(pre_slope_classic, post_slope_classic, pre_slope_hac, post_slope_hac)
 
+hac_lags <- c(1L, 5L, 10L)
+hac_sensitivity <- do.call(rbind, lapply(hac_lags, function(hac_lag) {
+  vc <- newey_west(full_model, lag = hac_lag)
+  interaction_test <- linear_test(full_model, setNames(1, interaction_name), vcov_matrix = vc,
+                                  label = paste0("Newey-West HAC(", hac_lag, ")"))
+  pre_test <- linear_test(full_model, c(JPY_app = 1), null = -1, vcov_matrix = vc,
+                          label = paste0("Newey-West HAC(", hac_lag, ")"))
+  post_test <- linear_test(full_model, setNames(c(1, 1), c("JPY_app", interaction_name)),
+                           null = -1, vcov_matrix = vc,
+                           label = paste0("Newey-West HAC(", hac_lag, ")"))
+  data.frame(
+    lag = hac_lag,
+    interaction_estimate = interaction_test$estimate,
+    interaction_se = interaction_test$std_error,
+    interaction_p = interaction_test$p_value,
+    interaction_conf_low = interaction_test$estimate - qt(.975, df.residual(full_model)) * interaction_test$std_error,
+    interaction_conf_high = interaction_test$estimate + qt(.975, df.residual(full_model)) * interaction_test$std_error,
+    pre_slope = pre_test$estimate,
+    pre_slope_vs_minus1_p = pre_test$p_value,
+    post_slope = post_test$estimate,
+    post_slope_vs_minus1_p = post_test$p_value
+  )
+}))
+
+alignment_models <- list(
+  "Exact shared return interval (primary)" = full_model,
+  "Same end date only (sensitivity)" = end_date_only_model
+)
+alignment_model_sensitivity <- do.call(rbind, Map(function(alignment_name, model_item) {
+  vc <- newey_west(model_item, lag = 5)
+  interaction_test <- linear_test(model_item, setNames(1, interaction_name), vcov_matrix = vc,
+                                  label = "Newey-West HAC(5)")
+  data.frame(
+    alignment_rule = alignment_name,
+    rows = nobs(model_item),
+    r_squared = summary(model_item)$r.squared,
+    pre_slope = unname(coef(model_item)["JPY_app"]),
+    interaction = interaction_test$estimate,
+    interaction_hac5_p = interaction_test$p_value,
+    post_slope = unname(coef(model_item)["JPY_app"] + coef(model_item)[interaction_name])
+  )
+}, names(alignment_models), alignment_models))
+
 resid <- residuals(full_model)
 X <- model.matrix(full_model)
 n <- nrow(X); k <- ncol(X)
@@ -202,18 +309,63 @@ reset_model <- update(full_model, . ~ . + I(fitted(full_model)^2) + I(fitted(ful
 reset_anova <- anova(full_model, reset_model)
 cooks <- cooks.distance(full_model)
 
-split_index <- floor(0.80 * nrow(analysis_data))
-train <- analysis_data[seq_len(split_index), ]
-test <- analysis_data[(split_index + 1):nrow(analysis_data), ]
-train_model <- lm(full_formula, data = train)
-test_prediction <- predict(train_model, newdata = test)
-naive_prediction <- rep(mean(train$Y), nrow(test))
-validation_metrics <- data.frame(
-  model = c("Full regression", "Historical-mean benchmark"),
-  RMSE = c(sqrt(mean((test$Y - test_prediction)^2)), sqrt(mean((test$Y - naive_prediction)^2))),
-  MAE = c(mean(abs(test$Y - test_prediction)), mean(abs(test$Y - naive_prediction))),
-  train_end = max(train$date), test_start = min(test$date), test_end = max(test$date)
+# Strict chronological evaluation: 60% train, 20% tuning, 20% untouched test.
+# Model selection uses tuning only; test is evaluated once after the choice is locked.
+n_obs <- nrow(analysis_data)
+train_end_index <- floor(0.60 * n_obs)
+tuning_end_index <- floor(0.80 * n_obs)
+train <- analysis_data[seq_len(train_end_index), ]
+tuning <- analysis_data[(train_end_index + 1):tuning_end_index, ]
+test <- analysis_data[(tuning_end_index + 1):n_obs, ]
+analysis_data$split <- factor(c(rep("train", nrow(train)), rep("tuning", nrow(tuning)),
+                                rep("test", nrow(test))), levels = c("train", "tuning", "test"))
+
+candidate_formulas <- list(
+  "FX interaction" = baseline_formula,
+  "Macro controls" = Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff,
+  "Full factor model" = full_formula
 )
+tuning_metrics <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
+  fitted_candidate <- lm(candidate_formulas[[model_name]], data = train)
+  metrics <- prediction_metrics(tuning$Y, predict(fitted_candidate, newdata = tuning))
+  data.frame(model = model_name, RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]),
+             train_start = min(train$date), train_end = max(train$date),
+             tuning_start = min(tuning$date), tuning_end = max(tuning$date))
+}))
+selected_model_name <- tuning_metrics$model[which.min(tuning_metrics$RMSE)]
+development <- rbind(train, tuning)
+selected_model <- lm(candidate_formulas[[selected_model_name]], data = development)
+test_prediction <- as.numeric(predict(selected_model, newdata = test))
+historical_mean_prediction <- rep(mean(development$Y), nrow(test))
+zero_prediction <- rep(0, nrow(test))
+
+test_metrics <- do.call(rbind, lapply(list(
+  selected = list(name = paste0("Selected: ", selected_model_name), pred = test_prediction),
+  historical_mean = list(name = "Historical-mean benchmark", pred = historical_mean_prediction),
+  zero = list(name = "Zero-return benchmark", pred = zero_prediction)
+), function(item) {
+  metrics <- prediction_metrics(test$Y, item$pred)
+  data.frame(model = item$name, RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]),
+             development_end = max(development$date), test_start = min(test$date), test_end = max(test$date))
+}))
+
+test_predictions <- data.frame(
+  date = test$date,
+  actual = test$Y,
+  selected_model = selected_model_name,
+  predicted = test_prediction,
+  historical_mean = historical_mean_prediction,
+  zero = zero_prediction
+)
+split_summary <- do.call(rbind, lapply(levels(analysis_data$split), function(split_name) {
+  block <- analysis_data[analysis_data$split == split_name, ]
+  data.frame(split = split_name, rows = nrow(block), start_date = min(block$date), end_date = max(block$date),
+             purpose = switch(split_name, train = "fit candidate models", tuning = "select by RMSE",
+                              test = "one final held-out evaluation"))
+}))
+
+stopifnot(max(train$date) < min(tuning$date), max(tuning$date) < min(test$date))
+stopifnot(!anyDuplicated(analysis_data$date))
 
 diagnostics <- data.frame(
   metric = c("observations", "start_date", "end_date", "pre_observations", "post_observations",
@@ -246,8 +398,16 @@ write.csv(vif_table, file.path(results_dir, "vif.csv"), row.names = FALSE)
 write.csv(hypothesis_tests, file.path(results_dir, "fx_slope_hypothesis_tests.csv"), row.names = FALSE)
 write.csv(diagnostics, file.path(results_dir, "diagnostics.csv"), row.names = FALSE)
 write.csv(predictor_summary, file.path(results_dir, "predictor_summary.csv"), row.names = FALSE)
-write.csv(validation_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
-saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5),
+write.csv(alignment_audit, file.path(results_dir, "data_alignment_audit.csv"), row.names = FALSE)
+write.csv(alignment_model_sensitivity, file.path(results_dir, "data_alignment_sensitivity.csv"), row.names = FALSE)
+write.csv(hac_sensitivity, file.path(results_dir, "hac_lag_sensitivity.csv"), row.names = FALSE)
+write.csv(split_summary, file.path(results_dir, "split_summary.csv"), row.names = FALSE)
+write.csv(tuning_metrics, file.path(results_dir, "model_selection_tuning.csv"), row.names = FALSE)
+write.csv(test_metrics, file.path(results_dir, "heldout_test_metrics.csv"), row.names = FALSE)
+write.csv(test_predictions, file.path(results_dir, "heldout_test_predictions.csv"), row.names = FALSE)
+write.csv(test_metrics, file.path(results_dir, "chronological_validation.csv"), row.names = FALSE)
+saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vcov_hac5,
+             selected_model_name = selected_model_name, selected_model = selected_model),
         file.path(results_dir, "models.rds"))
 
 png(file.path(figures_dir, "fx_slope_by_period.png"), width = 1800, height = 1200, res = 180)
@@ -260,6 +420,47 @@ abline(a = coef(full_model)["(Intercept)"] + coef(full_model)["PostPost"],
        b = coef(full_model)["JPY_app"] + coef(full_model)[interaction_name], col = "#d94b36", lwd = 3)
 legend("topright", legend = c("Pre: through 2020-03-10", "Post: from 2020-03-12"),
        col = c("#1f6aa5", "#d94b36"), lwd = 3, bty = "n")
+dev.off()
+
+png(file.path(figures_dir, "chronological_split.png"), width = 1800, height = 1100, res = 180)
+split_cols <- c(train = "#1f6aa5", tuning = "#e69f00", test = "#d94b36")
+plot(analysis_data$date, analysis_data$Y, pch = 16, cex = .35,
+     col = adjustcolor(split_cols[as.character(analysis_data$split)], alpha.f = .35),
+     xlab = "Date", ylab = "Daily return spread (%)",
+     main = "Chronological train / tuning / test split")
+abline(v = as.numeric(c(max(train$date), max(tuning$date))), lty = 2, col = "grey35")
+legend("topright", legend = names(split_cols), col = split_cols, pch = 16, bty = "n")
+dev.off()
+
+png(file.path(figures_dir, "tuning_model_comparison.png"), width = 1600, height = 1100, res = 180)
+bar_cols <- ifelse(tuning_metrics$model == selected_model_name, "#1f6aa5", "#a9b6c2")
+bar_pos <- barplot(tuning_metrics$RMSE, names.arg = tuning_metrics$model, col = bar_cols,
+                   las = 1, ylab = "Tuning RMSE", main = "Model selection uses tuning period only",
+                   ylim = c(0, max(tuning_metrics$RMSE) * 1.18))
+text(bar_pos, tuning_metrics$RMSE, labels = sprintf("%.4f", tuning_metrics$RMSE), pos = 3)
+dev.off()
+
+png(file.path(figures_dir, "heldout_test_predictions.png"), width = 1800, height = 1100, res = 180)
+actual_roll <- trailing_mean(test_predictions$actual)
+pred_roll <- trailing_mean(test_predictions$predicted)
+plot(test_predictions$date, actual_roll, type = "l", lwd = 2, col = "#1f6aa5",
+     xlab = "Date", ylab = "Trailing 20-day mean return spread (%)",
+     main = paste("Held-out conditional fit:", selected_model_name))
+lines(test_predictions$date, pred_roll, lwd = 2, col = "#d94b36")
+abline(h = 0, lty = 2, col = "grey50")
+legend("topright", legend = c("Actual", "Predicted"), col = c("#1f6aa5", "#d94b36"),
+       lwd = 2, bty = "n")
+dev.off()
+
+png(file.path(figures_dir, "hac_lag_sensitivity.png"), width = 1500, height = 1050, res = 180)
+plot(hac_sensitivity$lag, hac_sensitivity$interaction_estimate, pch = 19, cex = 1.2,
+     ylim = range(c(hac_sensitivity$interaction_conf_low, hac_sensitivity$interaction_conf_high)),
+     xlab = "Newey-West lag", ylab = "JPY appreciation x Post estimate",
+     main = "Pandemic-interaction estimate with 95% HAC intervals")
+segments(hac_sensitivity$lag, hac_sensitivity$interaction_conf_low,
+         hac_sensitivity$lag, hac_sensitivity$interaction_conf_high, lwd = 2, col = "#1f6aa5")
+abline(h = 0, lty = 2, col = "grey45")
+axis(1, at = hac_sensitivity$lag)
 dev.off()
 
 png(file.path(figures_dir, "residual_diagnostics.png"), width = 1800, height = 1600, res = 180)
@@ -300,6 +501,7 @@ log_lines <- c(
   sprintf("Baseline R-squared: %.6f", summary(baseline_model)$r.squared),
   sprintf("Durbin-Watson: %.4f", dw),
   sprintf("Max VIF: %.3f (%s)", max(vif_table$vif), vif_table$term[which.max(vif_table$vif)]),
+  paste("Selected predictive model:", selected_model_name),
   "",
   "Classical coefficients:",
   paste(capture.output(print(coef_classic, row.names = FALSE, digits = 7)), collapse = "\n"),
@@ -307,12 +509,18 @@ log_lines <- c(
   "HAC(5) coefficients:",
   paste(capture.output(print(coef_hac5, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
-  "Chronological validation:",
-  paste(capture.output(print(validation_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "Chronological split:",
+  paste(capture.output(print(split_summary, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Tuning-only model selection:",
+  paste(capture.output(print(tuning_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Untouched held-out test:",
+  paste(capture.output(print(test_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
   "R session information:",
   paste(capture.output(sessionInfo()), collapse = "\n")
 )
 writeLines(log_lines, file.path(results_dir, "R_run_log.txt"))
 
-cat(paste(log_lines[1:10], collapse = "\n"), "\n")
+cat(paste(log_lines[1:11], collapse = "\n"), "\n")

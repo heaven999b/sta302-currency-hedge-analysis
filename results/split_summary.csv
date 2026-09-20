@@ -1,0 +1,4 @@
+"split","rows","start_date","end_date","purpose"
+"train",1593,2014-02-06,2021-07-20,"fit candidate models"
+"tuning",531,2021-07-21,2024-01-23,"select by RMSE"
+"test",531,2024-01-24,2026-07-31,"one final held-out evaluation"

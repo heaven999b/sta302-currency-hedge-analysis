@@ -37,23 +37,35 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 def validate_analysis() -> None:
     data = read_rows(ROOT / "data" / "processed" / "sta302_daily_analysis.csv")
-    require(len(data) == 2753, f"Expected 2753 rows, found {len(data)}")
+    require(len(data) == 2655, f"Expected 2655 rows, found {len(data)}")
     require(data[0]["date"] == "2014-02-06", f"Unexpected first date: {data[0]['date']}")
     require(data[-1]["date"] == "2026-07-31", f"Unexpected last date: {data[-1]['date']}")
 
     coefficients = read_rows(ROOT / "results" / "coefficients_hac5.csv")
     by_term = {row["term"]: row for row in coefficients}
-    require(abs(float(by_term["JPY_app"]["estimate"]) - (-0.851968889752887)) < 1e-6,
+    require(abs(float(by_term["JPY_app"]["estimate"]) - (-0.850936443698603)) < 1e-6,
             "JPY_app estimate changed")
-    require(abs(float(by_term["JPY_app:PostPost"]["estimate"]) - (-0.064808531)) < 1e-6,
+    require(abs(float(by_term["JPY_app:PostPost"]["estimate"]) - (-0.0612064199953553)) < 1e-6,
             "interaction estimate changed")
-    require(abs(float(by_term["JPY_app:PostPost"]["p_value"]) - 0.0683468628773935) < 1e-6,
+    require(abs(float(by_term["JPY_app:PostPost"]["p_value"]) - 0.104391107292676) < 1e-6,
             "interaction HAC p-value changed")
 
     diagnostics = {row["metric"]: row["value"] for row in read_rows(ROOT / "results" / "diagnostics.csv")}
-    require(abs(float(diagnostics["r_squared_full"]) - 0.712119863255427) < 1e-6,
+    require(abs(float(diagnostics["r_squared_full"]) - 0.703818792797337) < 1e-6,
             "full-model R-squared changed")
     require(float(diagnostics["max_vif"]) < 5, "maximum VIF is unexpectedly high")
+
+    splits = read_rows(ROOT / "results" / "split_summary.csv")
+    require([row["split"] for row in splits] == ["train", "tuning", "test"],
+            "Chronological split order changed")
+    require(sum(int(row["rows"]) for row in splits) == len(data), "Split rows do not cover data")
+
+    tuning = read_rows(ROOT / "results" / "model_selection_tuning.csv")
+    selected = min(tuning, key=lambda row: float(row["RMSE"]))["model"]
+    test = read_rows(ROOT / "results" / "heldout_test_metrics.csv")
+    require(test[0]["model"] == f"Selected: {selected}", "Held-out model was not locked on tuning")
+    require(float(test[0]["RMSE"]) < min(float(row["RMSE"]) for row in test[1:]),
+            "Selected model does not beat held-out benchmarks")
 
 
 def validate_artifacts() -> None:
@@ -64,6 +76,10 @@ def validate_artifacts() -> None:
         ROOT / "figures" / "fx_slope_by_period.png",
         ROOT / "figures" / "residual_diagnostics.png",
         ROOT / "figures" / "coefficient_intervals_hac5.png",
+        ROOT / "figures" / "chronological_split.png",
+        ROOT / "figures" / "tuning_model_comparison.png",
+        ROOT / "figures" / "heldout_test_predictions.png",
+        ROOT / "figures" / "hac_lag_sensitivity.png",
         ROOT / "results" / "R_run_log.txt",
     ]
     for target in required:
@@ -107,7 +123,8 @@ def validate_submission() -> None:
 
     rmd = (package / "code" / "STA302_Project_Analysis.Rmd").read_text(encoding="utf-8")
     require('source("analysis/run_analysis.R")' not in rmd, "Submission Rmd still sources an external R script")
-    for phrase in ["read_yahoo_adjusted <- function", "full_formula <-", "residual_diagnostics.png"]:
+    for phrase in ["read_yahoo_adjusted <- function", "native_log_return <- function", "full_formula <-",
+                   "Strict chronological evaluation", "residual_diagnostics.png"]:
         require(phrase in rmd, f"Standalone Rmd is missing analysis code: {phrase}")
 
 
@@ -119,7 +136,7 @@ def main() -> None:
     validate_analysis()
     validate_artifacts()
     validate_submission()
-    print("VALIDATION PASSED: raw hashes, analysis results, both proposal PDFs, standalone Rmd, and CSV submission package are consistent.")
+    print("VALIDATION PASSED: raw hashes, aligned analysis, strict splits, held-out results, figures, PDFs, standalone Rmd, and CSV package are consistent.")
 
 
 if __name__ == "__main__":

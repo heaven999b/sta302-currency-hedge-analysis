@@ -1,0 +1,27 @@
+protocol_version: 2
+frozen_on: 2026-09-21
+research_question: "Does the HEWJ-minus-EWJ daily return spread offset yen appreciation, and did the conditional slope change after 2020-03-11?"
+data:
+  frequency: daily
+  return_definition: "100 * log price difference"
+  alignment: "compute within each native series, merge on end date, require identical interval start"
+  pandemic_transition_date_excluded: 2020-03-11
+inference:
+  estimator: OLS
+  primary_covariance: "Newey-West HAC(5)"
+  sensitivity_lags: [1, 10]
+  alpha: 0.05
+prediction:
+  role: secondary
+  split: chronological
+  proportions: {train: 0.60, tuning: 0.20, test: 0.20}
+  selection_metric: RMSE
+  test_policy: "evaluate once after selecting on tuning and refitting on train+tuning"
+  candidates:
+    - "Y ~ JPY_app * Post"
+    - "Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff"
+    - "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"
+  benchmarks: [historical_mean, zero_return]
+randomness:
+  stochastic_steps: false
+  seed: null

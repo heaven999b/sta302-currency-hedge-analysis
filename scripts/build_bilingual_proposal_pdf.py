@@ -246,6 +246,7 @@ def contribution_table(styles, chinese=False):
 
 def variable_summary_table(styles, chinese=False):
     summary = {row["variable"]: row for row in read_csv(ROOT / "results" / "predictor_summary.csv")}
+    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "diagnostics.csv")}
     labels = {
         "Y": ("Response spread", "Extreme days; heavy tails"),
         "JPY_app": ("Yen appreciation", "Wide daily extremes"),
@@ -289,8 +290,8 @@ def variable_summary_table(styles, chinese=False):
     rows.append([
         "Post period" if not chinese else "疫情后时期",
         "Categorical" if not chinese else "分类",
-        "Pre: 1,348" if not chinese else "疫情前：1,348",
-        "Post: 1,405" if not chinese else "疫情后：1,405",
+        f"Pre: {int(diagnostics['pre_observations']):,}" if not chinese else f"疫情前：{int(diagnostics['pre_observations']):,}",
+        f"Post: {int(diagnostics['post_observations']):,}" if not chinese else f"疫情后：{int(diagnostics['post_observations']):,}",
         "2 levels" if not chinese else "2 个水平",
         "WHO-defined break" if not chinese else "WHO 事件定义断点",
     ])
@@ -352,6 +353,9 @@ def schedule_table(styles, chinese=False):
 
 
 def cover(styles, bilingual=False):
+    diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "diagnostics.csv")}
+    data_line = (f"{int(diagnostics['observations']):,} daily observations | "
+                 f"{diagnostics['start_date']} to {diagnostics['end_date']}")
     story = [Spacer(1, .18 * inch), Paragraph("Does a Currency Hedge Neutralize Daily Yen Exposure?", styles["title"])]
     if bilingual:
         story.append(Paragraph("货币对冲能否抵消日元的日度风险敞口？", styles["title_zh"]))
@@ -361,16 +365,16 @@ def cover(styles, bilingual=False):
     story.extend([HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=18)])
     meta = [
         ["Course", "STA302 Final Project - Part 1"],
-        ["Prepared", "September 20, 2026"],
+        ["Prepared", "September 21, 2026"],
         ["Group", "Haiwen Yi; [add all other members before submission]"],
-        ["Data", "2,753 daily observations | 2014-02-06 to 2026-07-31"],
+        ["Data", data_line],
     ]
     if bilingual:
         meta = [
             ["Course / 课程", "STA302 Final Project - Part 1 / STA302 期末项目第一部分"],
-            ["Prepared / 日期", "September 20, 2026 / 2026 年 9 月 20 日"],
+            ["Prepared / 日期", "September 21, 2026 / 2026 年 9 月 21 日"],
             ["Group / 小组", "Haiwen Yi; [add all other members / 补充其他成员]"],
-            ["Data / 数据", "2,753 daily observations | 2014-02-06 to 2026-07-31"],
+            ["Data / 数据", data_line],
         ]
     story.extend([
         wrap_table(meta, [1.25 * inch, 5.15 * inch], styles, font_size=8.2, repeat_rows=0, chinese=bilingual),
