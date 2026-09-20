@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import csv
 import html
+import math
 import re
 from pathlib import Path
+from statistics import NormalDist
 
+from PIL import Image as PILImage, ImageDraw, ImageFont
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -34,6 +37,10 @@ OUTPUT_BILINGUAL = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal
 OUTPUT_ZH = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf"
 SCATTER = ROOT / "figures" / "fx_slope_by_period.png"
 DIAGNOSTICS = ROOT / "figures" / "residual_diagnostics.png"
+SCATTER_ZH = ROOT / "figures" / "fx_slope_by_period_zh.png"
+DIAGNOSTICS_ZH = ROOT / "figures" / "residual_diagnostics_zh.png"
+ZH_FONT_PATH = Path("/System/Library/Fonts/STHeiti Medium.ttc")
+ZH_FONT = "STHeiti-Embedded"
 
 NAVY = colors.HexColor("#15324B")
 BLUE = colors.HexColor("#1F6AA5")
@@ -43,7 +50,9 @@ MID = colors.HexColor("#5D6B78")
 
 
 def register_fonts() -> None:
-    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    if not ZH_FONT_PATH.exists():
+        raise FileNotFoundError(f"Embedded Chinese font not found: {ZH_FONT_PATH}")
+    pdfmetrics.registerFont(TTFont(ZH_FONT, str(ZH_FONT_PATH), subfontIndex=0))
 
 
 def clean_inline(text: str) -> str:
@@ -120,34 +129,185 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def _pil_font(size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(str(ZH_FONT_PATH), size=size, index=0)
+
+
+def _scale(value: float, low: float, high: float, start: float, end: float) -> float:
+    if high == low:
+        return (start + end) / 2
+    return start + (value - low) * (end - start) / (high - low)
+
+
+def _draw_axes(draw, box, x_range, y_range, x_label, y_label, title, font, small):
+    left, top, right, bottom = box
+    draw.rectangle(box, outline="#5D6B78", width=2)
+    draw.text(((left + right) / 2, top - 52), title, font=font, fill="#15324B", anchor="mm")
+    draw.text(((left + right) / 2, bottom + 48), x_label, font=small, fill="#1D252C", anchor="mm")
+    vertical_label = y_label if "\n" in y_label else "\n".join(y_label)
+    draw.multiline_text((left - 82, (top + bottom) / 2), vertical_label, font=small, fill="#1D252C",
+                        anchor="mm", align="center", spacing=3)
+    for i in range(5):
+        xv = x_range[0] + i * (x_range[1] - x_range[0]) / 4
+        px = _scale(xv, *x_range, left, right)
+        draw.line((px, bottom, px, bottom + 8), fill="#5D6B78", width=2)
+        draw.text((px, bottom + 22), f"{xv:.1f}", font=small, fill="#5D6B78", anchor="mm")
+        yv = y_range[0] + i * (y_range[1] - y_range[0]) / 4
+        py = _scale(yv, *y_range, bottom, top)
+        draw.line((left - 8, py, left, py), fill="#5D6B78", width=2)
+        draw.text((left - 14, py), f"{yv:.1f}", font=small, fill="#5D6B78", anchor="rm")
+
+
+def build_chinese_figures() -> None:
+    """Create Chinese-labelled figures without relying on an external R installation."""
+    rows = read_csv(ROOT / "data" / "processed" / "sta302_daily_analysis.csv")
+    coefficients = {
+        row["term"]: float(row["estimate"])
+        for row in read_csv(ROOT / "results" / "coefficients_classical.csv")
+    }
+    SCATTER_ZH.parent.mkdir(parents=True, exist_ok=True)
+
+    # Figure 1: observed spread and controlled period-specific FX slopes.
+    image = PILImage.new("RGB", (1800, 1120), "white")
+    draw = ImageDraw.Draw(image)
+    title = _pil_font(42)
+    label = _pil_font(29)
+    small = _pil_font(22)
+    box = (170, 120, 1690, 960)
+    xs = [float(row["JPY_app"]) for row in rows]
+    ys = [float(row["Y"]) for row in rows]
+    x_range = (math.floor(min(xs)), math.ceil(max(xs)))
+    y_range = (math.floor(min(ys)), math.ceil(max(ys)))
+    _draw_axes(draw, box, x_range, y_range, "日元升值（百分点）", "HEWJ-EWJ\n日收益差\n（百分点）",
+               "日元升值与货币对冲收益差：疫情前后比较", title, small)
+    left, top, right, bottom = box
+    colors_by_period = {"Pre": "#3B82B8", "Post": "#D95F59"}
+    for row in rows:
+        px = _scale(float(row["JPY_app"]), *x_range, left, right)
+        py = _scale(float(row["Y"]), *y_range, bottom, top)
+        fill = colors_by_period[row["Post"]]
+        draw.ellipse((px - 3, py - 3, px + 3, py + 3), fill=fill)
+    for period, color in colors_by_period.items():
+        post = 1.0 if period == "Post" else 0.0
+        intercept = coefficients["(Intercept)"] + post * coefficients["PostPost"]
+        slope = coefficients["JPY_app"] + post * coefficients["JPY_app:PostPost"]
+        x1, x2 = x_range
+        y1, y2 = intercept + slope * x1, intercept + slope * x2
+        draw.line((_scale(x1, *x_range, left, right), _scale(y1, *y_range, bottom, top),
+                   _scale(x2, *x_range, left, right), _scale(y2, *y_range, bottom, top)), fill=color, width=7)
+    legend_y = 1040
+    draw.ellipse((590, legend_y - 9, 608, legend_y + 9), fill=colors_by_period["Pre"])
+    draw.text((620, legend_y), "疫情前", font=label, fill="#1D252C", anchor="lm")
+    draw.ellipse((900, legend_y - 9, 918, legend_y + 9), fill=colors_by_period["Post"])
+    draw.text((930, legend_y), "疫情后", font=label, fill="#1D252C", anchor="lm")
+    image.save(SCATTER_ZH, optimize=True)
+
+    # Figure 2: diagnostics reconstructed from the stored coefficients and processed data.
+    term_order = ["(Intercept)", "JPY_app", "PostPost", "Nikkei_ret", "SMB", "HML", "RMW", "CMA",
+                  "MOM", "dlog_VIX", "rate_diff", "JPY_app:PostPost"]
+    fitted, residuals = [], []
+    for row in rows:
+        post = 1.0 if row["Post"] == "Post" else 0.0
+        values = [1.0, float(row["JPY_app"]), post, float(row["Nikkei_ret"]), float(row["SMB"]),
+                  float(row["HML"]), float(row["RMW"]), float(row["CMA"]), float(row["MOM"]),
+                  float(row["dlog_VIX"]), float(row["rate_diff"]), float(row["JPY_app"]) * post]
+        pred = sum(coefficients[term] * value for term, value in zip(term_order, values))
+        fitted.append(pred)
+        residuals.append(float(row["Y"]) - pred)
+
+    image = PILImage.new("RGB", (1800, 1320), "white")
+    draw = ImageDraw.Draw(image)
+    panel_title = _pil_font(30)
+    panel_label = _pil_font(21)
+    panels = [(140, 115, 850, 595), (990, 115, 1700, 595), (140, 770, 850, 1250), (990, 770, 1700, 1250)]
+
+    # Residuals versus fitted.
+    xr = (min(fitted), max(fitted)); yr = (min(residuals), max(residuals))
+    _draw_axes(draw, panels[0], xr, yr, "拟合值", "残差", "残差与拟合值", panel_title, panel_label)
+    l, t, r, b = panels[0]
+    for x, y in zip(fitted, residuals):
+        px, py = _scale(x, *xr, l, r), _scale(y, *yr, b, t)
+        draw.ellipse((px - 2, py - 2, px + 2, py + 2), fill="#397DAF")
+    zero_y = _scale(0, *yr, b, t)
+    draw.line((l, zero_y, r, zero_y), fill="#D95F59", width=3)
+
+    # Normal Q-Q plot.
+    observed = sorted(residuals)
+    n = len(observed)
+    mean = sum(observed) / n
+    sd = math.sqrt(sum((x - mean) ** 2 for x in observed) / (n - 1))
+    theoretical = [NormalDist().inv_cdf((i + .5) / n) for i in range(n)]
+    q_range = (theoretical[0], theoretical[-1]); o_range = (observed[0], observed[-1])
+    _draw_axes(draw, panels[1], q_range, o_range, "正态理论分位数", "标准化残差", "正态 Q-Q 图", panel_title, panel_label)
+    l, t, r, b = panels[1]
+    for x, y in zip(theoretical, observed):
+        px, py = _scale(x, *q_range, l, r), _scale(y, *o_range, b, t)
+        draw.ellipse((px - 2, py - 2, px + 2, py + 2), fill="#397DAF")
+    draw.line((_scale(q_range[0], *q_range, l, r), _scale(mean + sd * q_range[0], *o_range, b, t),
+               _scale(q_range[1], *q_range, l, r), _scale(mean + sd * q_range[1], *o_range, b, t)), fill="#D95F59", width=3)
+
+    # Residuals in time order.
+    time_range = (1.0, float(n))
+    _draw_axes(draw, panels[2], time_range, yr, "观测顺序", "残差", "残差的时间顺序", panel_title, panel_label)
+    l, t, r, b = panels[2]
+    points = [(_scale(i + 1, *time_range, l, r), _scale(y, *yr, b, t)) for i, y in enumerate(residuals)]
+    draw.line(points, fill="#397DAF", width=2)
+    zero_y = _scale(0, *yr, b, t)
+    draw.line((l, zero_y, r, zero_y), fill="#D95F59", width=3)
+
+    # Residual autocorrelation.
+    max_lag = 30
+    denom = sum((x - mean) ** 2 for x in residuals)
+    acf = [sum((residuals[i] - mean) * (residuals[i - lag] - mean) for i in range(lag, n)) / denom
+           for lag in range(1, max_lag + 1)]
+    acf_limit = max(.20, max(abs(x) for x in acf) * 1.2)
+    acf_range = (-acf_limit, acf_limit)
+    _draw_axes(draw, panels[3], (1, max_lag), acf_range, "滞后阶数", "自相关系数", "残差自相关", panel_title, panel_label)
+    l, t, r, b = panels[3]
+    zero_y = _scale(0, *acf_range, b, t)
+    conf = 1.96 / math.sqrt(n)
+    for bound in (-conf, conf):
+        py = _scale(bound, *acf_range, b, t)
+        draw.line((l, py, r, py), fill="#D95F59", width=2)
+    for lag, value in enumerate(acf, 1):
+        px = _scale(lag, 1, max_lag, l, r)
+        py = _scale(value, *acf_range, b, t)
+        draw.line((px, zero_y, px, py), fill="#397DAF", width=6)
+    image.save(DIAGNOSTICS_ZH, optimize=True)
+
+
 class ProposalDoc(BaseDocTemplate):
-    def __init__(self, filename: str, title: str):
+    def __init__(self, filename: str, title: str, header_text: str, page_label: str = "Page"):
         super().__init__(
             filename,
             pagesize=letter,
             rightMargin=.66 * inch,
             leftMargin=.66 * inch,
             topMargin=.70 * inch,
-            bottomMargin=.82 * inch,
+            bottomMargin=.96 * inch,
             title=title,
             author="Haiwen Yi and group members",
         )
+        self.header_text = header_text
+        self.page_label = page_label
         frame = Frame(self.leftMargin, self.bottomMargin, self.width, self.height, id="body")
         self.addPageTemplates(PageTemplate(id="main", frames=frame, onPage=self.draw_page))
 
     def draw_page(self, canvas, doc):
         canvas.saveState()
-        if doc.page > 1:
+        page_number = canvas.getPageNumber()
+        if page_number > 1:
             canvas.setStrokeColor(colors.HexColor("#D9E0E6"))
             canvas.line(doc.leftMargin, letter[1] - .45 * inch,
                         letter[0] - doc.rightMargin, letter[1] - .45 * inch)
             canvas.setFillColor(MID)
-            canvas.setFont("STSong-Light", 7.6)
+            canvas.setFont(ZH_FONT, 7.6)
             canvas.drawString(doc.leftMargin, letter[1] - .34 * inch,
-                              "STA302 | Currency-Hedged Japan ETF Study | 日元对冲研究")
+                              self.header_text)
         canvas.setFillColor(MID)
-        canvas.setFont("Helvetica", 8)
-        canvas.drawRightString(letter[0] - doc.rightMargin, .36 * inch, f"Page {doc.page}")
+        canvas.setFont(ZH_FONT if self.page_label != "Page" else "Helvetica", 8)
+        footer = f"{self.page_label} {page_number}" if self.page_label == "Page" else f"第 {page_number} 页"
+        canvas.drawRightString(letter[0] - doc.rightMargin, .36 * inch, footer)
         canvas.restoreState()
 
 
@@ -156,37 +316,37 @@ def make_styles():
     return {
         "title": ParagraphStyle("Title", parent=base["Title"], fontName="Helvetica-Bold",
                                 fontSize=23, leading=28, textColor=NAVY, alignment=TA_LEFT, spaceAfter=8),
-        "title_zh": ParagraphStyle("TitleZH", parent=base["Title"], fontName="STSong-Light",
+        "title_zh": ParagraphStyle("TitleZH", parent=base["Title"], fontName=ZH_FONT,
                                    fontSize=19, leading=25, textColor=BLUE, alignment=TA_LEFT, spaceAfter=12),
         "subtitle": ParagraphStyle("Subtitle", parent=base["Heading2"], fontName="Helvetica",
                                    fontSize=13, leading=18, textColor=BLUE, alignment=TA_LEFT, spaceAfter=16),
-        "subtitle_zh": ParagraphStyle("SubtitleZH", parent=base["Heading2"], fontName="STSong-Light",
+        "subtitle_zh": ParagraphStyle("SubtitleZH", parent=base["Heading2"], fontName=ZH_FONT,
                                       fontSize=12, leading=17, textColor=BLUE, alignment=TA_LEFT, spaceAfter=14),
         "h1": ParagraphStyle("H1", parent=base["Heading1"], fontName="Helvetica-Bold", fontSize=14,
                              leading=18, textColor=NAVY, spaceBefore=10, spaceAfter=7, keepWithNext=True),
-        "h1_zh": ParagraphStyle("H1ZH", parent=base["Heading1"], fontName="STSong-Light", fontSize=13.2,
+        "h1_zh": ParagraphStyle("H1ZH", parent=base["Heading1"], fontName=ZH_FONT, fontSize=13.2,
                                 leading=17, textColor=NAVY, spaceBefore=8, spaceAfter=5, keepWithNext=True),
         "h2": ParagraphStyle("H2", parent=base["Heading2"], fontName="Helvetica-Bold", fontSize=11,
                              leading=14, textColor=BLUE, spaceBefore=8, spaceAfter=6, keepWithNext=True),
         "body": ParagraphStyle("Body", parent=base["BodyText"], fontName="Helvetica", fontSize=8.75,
                                leading=12.0, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
-        "body_zh": ParagraphStyle("BodyZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.5,
-                                  leading=12.4, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
+        "body_zh": ParagraphStyle("BodyZH", parent=base["BodyText"], fontName=ZH_FONT, fontSize=8.35,
+                                  leading=11.9, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
         "bullet": ParagraphStyle("Bullet", parent=base["BodyText"], fontName="Helvetica", fontSize=8.75,
                                  leading=12.0, leftIndent=16, firstLineIndent=-12, bulletIndent=0),
-        "bullet_zh": ParagraphStyle("BulletZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.5,
-                                    leading=12.4, leftIndent=18, firstLineIndent=-14, bulletIndent=0),
+        "bullet_zh": ParagraphStyle("BulletZH", parent=base["BodyText"], fontName=ZH_FONT, fontSize=8.35,
+                                    leading=11.9, leftIndent=18, firstLineIndent=-14, bulletIndent=0),
         "caption": ParagraphStyle("Caption", parent=base["BodyText"], fontName="Helvetica-Oblique",
                                   fontSize=7.6, leading=9.4, textColor=MID, spaceBefore=3, spaceAfter=8),
-        "caption_zh": ParagraphStyle("CaptionZH", parent=base["BodyText"], fontName="STSong-Light",
+        "caption_zh": ParagraphStyle("CaptionZH", parent=base["BodyText"], fontName=ZH_FONT,
                                      fontSize=7.7, leading=10.2, textColor=MID, spaceBefore=3, spaceAfter=8),
         "small": ParagraphStyle("Small", parent=base["BodyText"], fontName="Helvetica", fontSize=7.6,
                                 leading=9.5, textColor=MID),
-        "small_zh": ParagraphStyle("SmallZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=7.7,
+        "small_zh": ParagraphStyle("SmallZH", parent=base["BodyText"], fontName=ZH_FONT, fontSize=7.7,
                                    leading=10.5, textColor=MID),
         "equation": ParagraphStyle("Equation", parent=base["BodyText"], fontName="Helvetica-Oblique",
                                    fontSize=9.0, leading=12, alignment=TA_CENTER, spaceBefore=4, spaceAfter=4),
-        "equation_zh": ParagraphStyle("EquationZH", parent=base["BodyText"], fontName="STSong-Light",
+        "equation_zh": ParagraphStyle("EquationZH", parent=base["BodyText"], fontName=ZH_FONT,
                                       fontSize=9.0, leading=13, alignment=TA_CENTER, spaceBefore=4, spaceAfter=4),
     }
 
@@ -195,7 +355,7 @@ def wrap_table(data, widths, styles, font_size=7.1, repeat_rows=1, chinese=False
     cell_style = ParagraphStyle(
         "CellZH" if chinese else "Cell",
         parent=styles["small_zh" if chinese else "small"],
-        fontName="STSong-Light" if chinese else "Helvetica",
+        fontName=ZH_FONT if chinese else "Helvetica",
         fontSize=font_size,
         leading=font_size + 2,
         textColor=colors.HexColor("#1D252C"),
@@ -203,7 +363,7 @@ def wrap_table(data, widths, styles, font_size=7.1, repeat_rows=1, chinese=False
     header_style = ParagraphStyle(
         "CellHeaderZH" if chinese else "CellHeader",
         parent=cell_style,
-        fontName="STSong-Light" if chinese else "Helvetica-Bold",
+        fontName=ZH_FONT if chinese else "Helvetica-Bold",
         textColor=colors.white,
     )
     wrapped = []
@@ -391,7 +551,8 @@ def cover(styles, bilingual=False, chinese_only=False):
             ["数据", data_line.replace("daily observations", "个日度观测").replace(" to ", " 至 ")],
         ]
     story.extend([
-        wrap_table(meta, [1.25 * inch, 5.15 * inch], styles, font_size=8.2, repeat_rows=0, chinese=bilingual),
+        wrap_table(meta, [1.25 * inch, 5.15 * inch], styles, font_size=8.2, repeat_rows=0,
+                   chinese=(bilingual or chinese_only)),
         Spacer(1, 24),
         Paragraph(
             "完整中文版" if chinese_only else
@@ -476,7 +637,7 @@ def chinese_content(sections, styles, start_new_page=True, standalone=False, inc
         if section == "初步结果":
             if include_figures:
                 story.extend([
-                    Image(str(SCATTER), width=6.25 * inch, height=4.16 * inch),
+                    Image(str(SCATTER_ZH), width=6.25 * inch, height=3.89 * inch),
                     Paragraph("图 1：日元升值与 HEWJ-EWJ 日度收益差，以及分时期 OLS 斜率。", styles["caption_zh"]),
                 ])
             story.extend([
@@ -494,7 +655,7 @@ def chinese_content(sections, styles, start_new_page=True, standalone=False, inc
         story.extend([
             PageBreak(),
             Paragraph("残差诊断", styles["h1_zh"]),
-            Image(str(DIAGNOSTICS), width=6.25 * inch, height=5.55 * inch),
+            Image(str(DIAGNOSTICS_ZH), width=6.25 * inch, height=4.58 * inch),
             Paragraph("图 2：未修正初步 OLS 模型的残差-拟合值、Q-Q、时间顺序与自相关图。", styles["caption_zh"]),
         ])
     return story
@@ -502,21 +663,31 @@ def chinese_content(sections, styles, start_new_page=True, standalone=False, inc
 
 def build() -> None:
     register_fonts()
+    build_chinese_figures()
     styles = make_styles()
     en_sections = parse_sections(EN_SOURCE.read_text(encoding="utf-8"))
     zh_sections = parse_sections(ZH_SOURCE.read_text(encoding="utf-8"))
     OUTPUT_EN.parent.mkdir(parents=True, exist_ok=True)
 
     official_story = cover(styles, bilingual=False) + english_content(en_sections, styles)
-    ProposalDoc(str(OUTPUT_EN), "STA302 Research Proposal - Official English Version").build(official_story)
+    ProposalDoc(
+        str(OUTPUT_EN), "STA302 Research Proposal - Official English Version",
+        "STA302 | Currency-Hedged Japan ETF Study"
+    ).build(official_story)
 
     bilingual_story = cover(styles, bilingual=True) + english_content(en_sections, styles) + chinese_content(zh_sections, styles)
-    ProposalDoc(str(OUTPUT_BILINGUAL), "STA302 Bilingual Research Proposal").build(bilingual_story)
+    ProposalDoc(
+        str(OUTPUT_BILINGUAL), "STA302 Bilingual Research Proposal",
+        "STA302 | Currency-Hedged Japan ETF Study | 日元对冲研究"
+    ).build(bilingual_story)
 
     chinese_story = cover(styles, chinese_only=True) + chinese_content(
         zh_sections, styles, start_new_page=False, standalone=True, include_figures=True
     )
-    ProposalDoc(str(OUTPUT_ZH), "STA302 Research Proposal - Chinese Version").build(chinese_story)
+    ProposalDoc(
+        str(OUTPUT_ZH), "STA302 Research Proposal - Chinese Version",
+        "STA302 | 日元对冲研究", page_label="页"
+    ).build(chinese_story)
 
     print(OUTPUT_EN)
     print(OUTPUT_BILINGUAL)
