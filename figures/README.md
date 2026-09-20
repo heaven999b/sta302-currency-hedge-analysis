@@ -20,7 +20,7 @@ figures/
 
 ## `prediction/`：展示严格预测流程
 
-- `chronological_split.png`：development 与 untouched final test。
+- `chronological_split.png`：development 与不参与拟合/选模的 final test。
 - `rolling_origin_folds.png`：三个扩展训练窗口与验证年度。
 - `rolling_origin_model_comparison.png`：三个候选模型总比较。
 - `model_fx_interaction_rolling_rmse.png`：最终选中的汇率交互模型。
@@ -33,4 +33,5 @@ figures/
 - `residual_diagnostics.png`：六联图检查残差与影响点。
 - `robustness_sensitivity.png`：函数形式、影响点、断点和变换参数。
 - `influence_diagnostics.png`：Cook 距离随时间的筛查。
+- `time_and_return_definition_sensitivity.png`：同日/Dimson/周度时钟修正及 log/普通收益测试波动对比。
 - `residual_diagnostics_zh.png`：中文 proposal 使用的诊断图。

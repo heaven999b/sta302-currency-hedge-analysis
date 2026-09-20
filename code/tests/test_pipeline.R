@@ -23,7 +23,11 @@ require_true(as.Date(splits$start_date[2]) == as.Date("2024-01-24"), "Final-test
 
 alignment <- read_result("audit", "data_alignment_audit.csv")
 require_true(all(alignment$final_joint_interval_rows == nrow(data)), "Alignment sample mismatch")
-require_true(all(alignment$exact_interval_start_matches_Y >= nrow(data)), "Invalid interval audit")
+price_rows <- alignment$series %in% c("JPY_app", "Nikkei_ret", "dlog_VIX")
+require_true(all(alignment$exact_interval_start_matches_Y[price_rows] >= nrow(data)),
+             "Invalid price-series interval audit")
+require_true(all(alignment$exact_interval_start_matches_Y[!price_rows] > 0),
+             "Invalid factor-series interval audit")
 
 rolling <- read_result("prediction", "model_selection_rolling_origin.csv")
 folds <- read_result("prediction", "rolling_origin_fold_metrics.csv")
@@ -37,6 +41,9 @@ require_true(identical(sort(unique(as.character(folds$validation_start))),
                        c("2021-01-05", "2022-01-05", "2023-01-05")),
              "Rolling-origin validation windows changed")
 require_true(test$RMSE[1] < min(test$RMSE[-1]), "Selected model does not beat test benchmarks")
+require_true(all(c("Static FX regression benchmark", "Theoretical minus-one spot benchmark",
+                   "Historical-mean benchmark", "Zero-return benchmark") %in% test$model),
+             "Held-out benchmark set is incomplete")
 
 hac <- read_result("inference", "coefficients_hac5.csv")
 interaction <- hac[hac$term == "JPY_app:PostPost", ]
@@ -66,6 +73,24 @@ require_true(nrow(breaks) == 3L, "Break-date sensitivity is incomplete")
 require_true(any(breaks$interaction_hac5_p < 0.05) && any(breaks$interaction_hac5_p > 0.05),
              "Break-date sensitivity no longer documents cutoff dependence")
 
+nonsync <- read_result("robustness", "nonsynchronous_fx_sensitivity.csv")
+require_true(nrow(nonsync) == 5L &&
+               all(c("Current-date full model", "Dimson adjacent-return full model",
+                     "Last-common-date weekly FX model") %in% nonsync$specification),
+             "Time-clock sensitivity is incomplete")
+require_true(abs(nonsync$post_exposure[nonsync$specification == "Dimson adjacent-return full model" &
+                                         nonsync$hac_lag == 22] + 1) < 0.05,
+             "Dimson post-period exposure changed materially")
+factor_clock <- read_result("robustness", "factor_interval_sensitivity.csv")
+require_true(nrow(factor_clock) == 2L, "Factor interval sensitivity is incomplete")
+
+return_def <- read_result("robustness", "return_definition_sensitivity.csv")
+require_true(nrow(return_def) == 2L &&
+               identical(return_def$definition, c("Log returns", "Arithmetic returns")),
+             "Return-definition sensitivity is incomplete")
+require_true(max(return_def$test_response_sd) / min(return_def$test_response_sd) < 1.01,
+             "Log/arithmetic test volatility diverges unexpectedly")
+
 quality <- read_result("audit", "data_quality_audit.csv")
 expected_status <- quality$expected == "TRUE" | quality$expected == "2655"
 require_true(all(as.logical(quality$status) == expected_status), "Data-quality audit contains a failed check")
@@ -81,10 +106,11 @@ required_figures <- c("prediction/chronological_split.png", "inference/fx_slope_
                       "prediction/model_full_factor_rolling_rmse.png",
                       "prediction/heldout_test_predictions.png",
                       "diagnostics/residual_diagnostics.png", "diagnostics/robustness_sensitivity.png",
-                      "diagnostics/influence_diagnostics.png")
+                      "diagnostics/influence_diagnostics.png",
+                      "diagnostics/time_and_return_definition_sensitivity.png")
 for (figure in required_figures) {
   target <- file.path(root, "figures", figure)
   require_true(file.exists(target) && file.info(target)$size > 1000, paste("Missing figure", figure))
 }
 
-cat("R PIPELINE TESTS PASSED: alignment, rolling-origin selection, held-out test, HAC, nonlinear, influence, break-date, CSV-export, and figure checks.\n")
+cat("R PIPELINE TESTS PASSED: interval/clock alignment, rolling-origin selection, held-out test, HAC, nonlinear, influence, break-date, return-definition, CSV-export, and figure checks.\n")

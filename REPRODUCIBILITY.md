@@ -7,6 +7,7 @@
 - `data/SOURCE_MANIFEST.csv` records provider, URL, retrieval date, variables, and SHA-256.
 - `config/analysis_protocol.yml` records the primary estimator, covariance rule, split, candidate models, and every robustness setting.
 - `data/DATA_DICTIONARY.csv` defines every field in the processed table.
+- `data/TIME_ALIGNMENT.csv` records the native time zone, observation clock, interval semantics, and treatment of every series.
 
 The pipeline does not fetch live data. This avoids silent revisions and makes the
 reported numbers reproducible. Provider ownership and redistribution conditions
@@ -37,8 +38,8 @@ bash code/pipeline/run_all.sh
 
 1. Recomputes all seven raw-file SHA-256 digests.
 2. Exports all original sources to deterministic CSV copies in `data/original_csv/`.
-3. Rebuilds the processed exact-interval table from frozen raw inputs.
-4. Re-estimates OLS, HAC(1/5/10), diagnostics, chronological validation, nonlinear checks, influence checks, and break-date checks.
+3. Rebuilds the processed calendar-interval-matched table and its separate intraday-clock audit from frozen raw inputs.
+4. Re-estimates OLS, HAC(1/5/10/22), clock-alignment/Dimson/weekly checks, exact arithmetic-return comparison, diagnostics, chronological validation, nonlinear checks, influence checks, and break-date checks.
 5. Runs R assertions for dates, row counts, split isolation, model-selection lock, conclusions, and figures.
 6. Rebuilds the standalone R Markdown HTML and the three proposal PDFs.
 7. Runs the standalone CSV-only R Markdown in an isolated temporary directory.
@@ -49,7 +50,7 @@ bash code/pipeline/run_all.sh
 
 - Dates are strictly increasing and never shuffled.
 - Candidate prediction models use expanding training windows ending in 2020, 2021, and 2022, followed by validation in 2021, 2022, and 2023.
-- The 2024-01-24 onward final test was evaluated once after the winner was locked by mean rolling-origin RMSE.
+- The 2024-01-24 onward test is excluded from model fitting and selection; it is retained as the final conditional-fit evaluation.
 - Nonlinear sensitivity work uses the same folds and does not reopen the final-test choice.
 - No stochastic estimator, bootstrap, random initialization, or random split is used, so a random seed is not applicable.
 - Yeo-Johnson lambda selection is repeated inside each training fold.
@@ -62,6 +63,9 @@ bash code/pipeline/run_all.sh
 | Can every source be opened as CSV? | `data/original_csv/` and its `SHA256SUMS.csv` |
 | What does each processed field mean? | `data/DATA_DICTIONARY.csv` |
 | Are dates, missingness, intervals, and splits valid? | `results/audit/data_quality_audit.csv` |
+| Are market clocks and time zones explicit? | `data/TIME_ALIGNMENT.csv`, `results/audit/data_alignment_audit.csv` |
+| Does nonsynchronous trading change FX exposure? | `results/robustness/nonsynchronous_fx_sensitivity.csv` |
+| Do log returns suppress test volatility? | `results/robustness/return_definition_sensitivity.csv` |
 | Was model selection time-respecting? | `results/prediction/rolling_origin_fold_metrics.csv` and `results/prediction/model_selection_rolling_origin.csv` |
 | Are conclusions robust to HAC lag? | `results/robustness/hac_lag_sensitivity.csv` |
 | Do nonlinear forms help? | `results/robustness/functional_form_sensitivity.csv` |

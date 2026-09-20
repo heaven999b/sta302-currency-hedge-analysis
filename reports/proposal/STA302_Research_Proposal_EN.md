@@ -23,7 +23,7 @@ Currency-hedged exchange-traded funds are designed to reduce exchange-rate expos
 
 ## Introduction (400 words)
 
-International equity investors receive returns from the local equity market and from the exchange rate used to translate foreign assets into their home currency. Currency-hedged exchange-traded funds attempt to remove the second component, but hedging may be incomplete because forward contracts are rolled periodically, trading calendars differ, expenses and implementation costs exist, and portfolios are not rebalanced continuously. This project asks: **How strongly does daily yen appreciation explain the return difference between the currency-hedged iShares MSCI Japan ETF (HEWJ) and its unhedged counterpart (EWJ), after controlling for equity, factor, volatility, and interest-rate conditions, and did that relationship change after the World Health Organization characterized COVID-19 as a pandemic?**
+International equity returns combine local-stock and currency movements. Currency-hedged ETFs aim to remove the latter, but rolling forwards, asynchronous calendars, expenses, and discrete rebalancing can make hedges incomplete. This project asks: **How strongly does daily yen appreciation explain the return difference between the currency-hedged iShares MSCI Japan ETF (HEWJ) and its unhedged counterpart (EWJ), after controlling for equity, factor, volatility, and interest-rate conditions, and did that relationship change after the World Health Organization characterized COVID-19 as a pandemic?**
 
 The response is the daily log-return spread, \(Y_t=100[\Delta\log(HEWJ_t)-\Delta\log(EWJ_t)]\), and \(JPYapp_t=-100\Delta\log(DEXJPUS_t)\) is positive when the yen appreciates. A mean comparison or simple correlation cannot simultaneously adjust for market conditions, estimate conditional period-specific slopes, and test a change in slope. Multiple linear regression provides adjusted coefficients, confidence intervals, and an interaction test. Under a complete contemporaneous hedge, the yen slope should be near -1. A categorical period indicator and its interaction with yen appreciation estimate pre- and post-pandemic slopes; March 11, 2020 is the pre-specified transition and is omitted.
 
@@ -33,7 +33,7 @@ The results would benefit U.S.-dollar investors, portfolio managers, and risk te
 
 ## Data description (289 words)
 
-The analysis contains 2,655 exact-interval daily observations from February 6, 2014 through July 31, 2026. Yahoo Finance records traded HEWJ and EWJ quotations for market information; adjusted closes incorporate splits and distributions for total-return comparisons. The Federal Reserve Board collects DEXJPUS as the noon New York buying rate for yen transfers. The Nikkei Industry Research Institute records the daily close of 225 liquid Tokyo stocks; CBOE derives VIX from index-option prices as expected near-term volatility; and the OECD compiles monthly U.S. and Japanese call-money/interbank rates. FRED redistributes these series. Kenneth French's Data Library forms value-weighted Japan equity portfolios for asset-pricing research, producing daily five-factor and momentum returns.
+The analysis contains 2,655 calendar-interval-matched daily observations from February 6, 2014 through July 31, 2026. Yahoo Finance records traded HEWJ and EWJ quotations for market information; adjusted closes incorporate splits and distributions for total-return comparisons. The Federal Reserve Board collects DEXJPUS as the noon New York buying rate for yen transfers. The Nikkei Industry Research Institute records the daily close of 225 liquid Tokyo stocks; CBOE derives VIX from index-option prices as expected near-term volatility; and the OECD compiles monthly U.S. and Japanese call-money/interbank rates. FRED redistributes these series. Kenneth French's Data Library forms value-weighted Japan equity portfolios for asset-pricing research, producing daily five-factor and momentum returns.
 
 The daily HEWJ-minus-EWJ log-return spread has mean 0.0180 percentage points, standard deviation 0.6243, and range -4.3097 to 3.7826. It is continuous and signed, making a linear conditional mean interpretable. Daily observations are ordered rather than strictly independent, so residual dependence is assessed and no causal interpretation is made.
 
@@ -65,17 +65,17 @@ Figure 2 provides a six-panel preliminary diagnostic grid. Residuals versus fitt
 
 These are preliminary OLS results. In accordance with the Part 1 instruction, we diagnose but do not correct violations here; robust inference and sensitivity analysis are deferred to the final project.
 
-## Plan for the remaining analysis (299 words)
+## Plan for the remaining analysis (274 words)
 
-The focal terms - yen appreciation, `Post`, and their interaction - will remain. We will first fit the full ten-predictor specification and retain it as the pre-specified inferential model. Predictive simplification will compare three hierarchy-respecting candidates: (1) the FX interaction alone; (2) macro controls adding Nikkei return, VIX change, and lagged rate differential; and (3) the full factor model additionally containing SMB, HML, RMW, CMA, and MOM. Controls will not be removed by individual p-values.
+The focal yen, `Post`, and interaction terms will remain. We will fit the full ten-predictor inferential model first. Predictive simplification will compare three hierarchy-respecting candidates: the FX interaction; macro controls adding Nikkei return, VIX change, and lagged rate differential; and the full factor model additionally containing SMB, HML, RMW, CMA, and MOM. Individual p-values will not select controls.
 
-After specification changes, we will recheck residual, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Given diagnostic violations, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation; a direct logarithm is invalid for signed returns. Transformations will be judged by diagnostics, rolling validation performance, and interpretability, not significance.
+After changes, we will repeat residual, Q-Q, time-order, ACF, Breusch-Pagan, Breusch-Godfrey, Cook's-distance, and VIF checks. Pre-specified nonlinear-yen and Yeo-Johnson alternatives will be judged by diagnostics, rolling performance, and interpretability. Exact arithmetic returns will rerun the full workflow to determine whether log returns compress test volatility.
 
-Primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and exclusion of confirmed data errors. Classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will vary the pandemic cut within a declared window rather than search all dates.
+Calendar intervals and intraday clocks will be audited separately. Because DEXJPUS is observed at New York noon whereas ETFs close later, Dimson's lag/current/lead method will report cumulative yen exposure with Newey-West lags 5 and 22; the lead will be diagnostic only, never predictive. A weekly last-common-date model will provide a second clock-robust check. We will also report factor-start-date matching, winsorization, confirmed-error exclusion, and a declared pandemic-break window rather than search dates.
 
-Prediction remains secondary. Expanding-window rolling-origin validation will fit each candidate through 2020, 2021, and 2022 and score the following calendar year, producing validation results for 2021-2023. Mean RMSE across the three folds will lock the winner. It will then be refitted on all development observations through January 23, 2024 and evaluated exactly once from January 24, 2024 onward against historical-mean and zero-return benchmarks. The full model remains the basis for confirmatory coefficient inference; the reduced winner is the final predictive model. No random splitting, final-test tuning, or post-test reselection will be used.
+Prediction remains secondary. Expanding-window rolling-origin validation will train through 2020, 2021, and 2022 and score the following years. Mean RMSE will lock the winner before the 2024-2026 test evaluation. The winner will be refitted through January 23, 2024 and compared with a static development-sample FX regression, theoretical minus-one spot exposure, historical mean, and zero. The full model remains confirmatory; the reduced winner is predictive. No random split, test tuning, or post-test reselection will occur.
 
-Frozen data, code, outputs, and selection evidence will be versioned. Table 3 assigns project milestones; member placeholders will be replaced from the signed agreement.
+Frozen data, code, outputs, clocks, and selection evidence will be versioned. Table 3 assigns milestones; member placeholders will be replaced from the signed agreement.
 
 ## References
 
@@ -83,11 +83,15 @@ Campbell, J. Y., Serfaty-de Medeiros, K., & Viceira, L. M. (2010). Global curren
 
 Fama, E. F., & French, K. R. (2015). A five-factor asset pricing model. *Journal of Financial Economics, 116*(1), 1–22. https://doi.org/10.1016/j.jfineco.2014.10.010
 
+Dimson, E. (1979). Risk measurement when shares are subject to infrequent trading. *Journal of Financial Economics, 7*(2), 197–226. https://doi.org/10.1016/0304-405X(79)90013-8
+
 Glen, J., & Jorion, P. (1993). Currency hedging for international portfolios. *The Journal of Finance, 48*(5), 1865–1886. https://doi.org/10.1111/j.1540-6261.1993.tb05131.x
 
 Hau, H., & Rey, H. (2006). Exchange rates, equity prices, and capital flows. *The Review of Financial Studies, 19*(1), 273–317. https://doi.org/10.1093/rfs/hhj008
 
 Shank, C. A., & Vianna, A. C. (2016). Are US-dollar-hedged-ETF investors aggressive on exchange rates? A panel VAR approach. *Research in International Business and Finance, 38*, 430–438. https://doi.org/10.1016/j.ribaf.2016.05.002
+
+Scholes, M., & Williams, J. (1977). Estimating betas from nonsynchronous data. *Journal of Financial Economics, 5*(3), 309–327. https://doi.org/10.1016/0304-405X(77)90041-1
 
 ## Data and product documentation
 

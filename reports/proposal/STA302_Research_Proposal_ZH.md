@@ -63,13 +63,13 @@ Y(t) = b0 + b1 JPYapp(t) + b2 Post(t) + b3 [JPYapp(t) x Post(t)] + g'Z(t) + e(t)
 
 ## 后续分析计划
 
-日元升值、`Post` 和交互项定义研究问题，因此必须保留。我们先拟合包含十个预测变量的完整模型，并将其保留为预先设定的解释性推断模型。预测优化预先限定三个遵守层级原则的候选模型：（1）仅汇率交互项；（2）加入日经收益、VIX 变化和滞后利差的宏观控制模型；（3）再加入 SMB、HML、RMW、CMA 和 MOM 的完整因子模型。不会依据单个变量的 p 值删减模型。
+日元升值、`Post` 和交互项定义研究问题，因此必须保留。我们先拟合十变量完整推断模型。预测优化只比较三个遵守层级原则的候选模型：汇率交互模型；加入日经、VIX 和滞后利差的宏观模型；再加入 SMB、HML、RMW、CMA 和 MOM 的完整因子模型。不会依据单个 p 值删减控制项。
 
-每次实质性修改后都会重新检查残差—拟合值图、Q-Q 图、时间图、ACF、Breusch-Pagan、Breusch-Godfrey、Cook 距离和 VIF。针对异方差、序列相关、厚尾和函数形式证据，将预先比较非线性日元项和可处理负值的 Yeo-Johnson 响应变换；不能直接对可为负的响应变量取对数。变换依据诊断、滚动验证表现和可解释性评估，而不是为了制造显著性。
+每次实质性修改后都会重新检查残差、Q-Q、时间图、ACF、Breusch-Pagan、Breusch-Godfrey、Cook 距离和 VIF。非线性日元项和 Yeo-Johnson 变换按诊断、滚动表现与可解释性判断；另用精确普通收益完整重跑，直接检验 log 收益是否压低测试波动。
 
-主分析保留所有有效观测；次要分析才使用预先声明的 0.5/99.5 分位缩尾或删除经证实的数据错误。经典区间将补充 1、5、10 日 Newey-West 区间，并在事先声明的小范围窗口内改变疫情断点，而不遍历所有日期寻找最小 p 值。
+日期区间与日内时钟分开审计。DEXJPUS 是纽约中午价，而 ETF 更晚收盘，因此采用 Dimson 前一期、当期、后一期累计暴露并报告 Newey-West lag 5 与 22；lead 只作诊断，绝不进入预测。另以每周最后共同日期重估，并报告因子区间起点匹配、缩尾、确认错误排除和事先声明的疫情断点窗口。
 
-预测采用扩展窗口 rolling-origin 验证：分别用截至 2020、2021、2022 年的数据训练，并依次在 2021、2022、2023 年验证；按三折平均 RMSE 锁定优胜模型。随后用截至 2024 年 1 月 23 日的全部开发数据重新拟合，只在 2024 年 1 月 24 日之后的未接触测试集上评估一次，并与历史均值和零收益基准比较。完整模型继续负责核心系数推断；精简后的优胜模型作为最终预测模型。不进行随机切分、测试集调参或测试后重新选模。
+预测采用扩展窗口 rolling-origin：截至 2020、2021、2022 年训练并在随后年度验证，按平均 RMSE 在测试前锁定模型。模型用截至 2024 年 1 月 23 日的数据重拟合，再在未参与拟合或选模的测试集上与静态汇率回归、理论 -1 即期暴露、历史均值和零收益比较。完整模型负责推断，精简模型负责预测；不随机切分、不用测试集调参或重选。
 
 所有原始快照、清洗 CSV、代码、输出和选模证据同步版本化。表 3 安排分析、海报和录制里程碑；提交前需把成员占位符替换成签署协议中的真实姓名。
 
@@ -79,11 +79,15 @@ Campbell, J. Y., Serfaty-de Medeiros, K., & Viceira, L. M. (2010). Global curren
 
 Fama, E. F., & French, K. R. (2015). A five-factor asset pricing model. *Journal of Financial Economics, 116*(1), 1–22. https://doi.org/10.1016/j.jfineco.2014.10.010
 
+Dimson, E. (1979). Risk measurement when shares are subject to infrequent trading. *Journal of Financial Economics, 7*(2), 197–226. https://doi.org/10.1016/0304-405X(79)90013-8
+
 Glen, J., & Jorion, P. (1993). Currency hedging for international portfolios. *The Journal of Finance, 48*(5), 1865–1886. https://doi.org/10.1111/j.1540-6261.1993.tb05131.x
 
 Hau, H., & Rey, H. (2006). Exchange rates, equity prices, and capital flows. *The Review of Financial Studies, 19*(1), 273–317. https://doi.org/10.1093/rfs/hhj008
 
 Shank, C. A., & Vianna, A. C. (2016). Are US-dollar-hedged-ETF investors aggressive on exchange rates? A panel VAR approach. *Research in International Business and Finance, 38*, 430–438. https://doi.org/10.1016/j.ribaf.2016.05.002
+
+Scholes, M., & Williams, J. (1977). Estimating betas from nonsynchronous data. *Journal of Financial Economics, 5*(3), 309–327. https://doi.org/10.1016/0304-405X(77)90041-1
 
 ## 数据与产品文档
 

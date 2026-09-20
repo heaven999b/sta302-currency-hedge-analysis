@@ -13,13 +13,16 @@ output:
 This standalone file imports the frozen source data, computes every price return
 on its native calendar before merging, enforces a common return interval, fits
 OLS with Newey-West HAC inference, runs diagnostics, and performs a strict
-expanding-window rolling-origin evaluation. Calendar years 2021, 2022, and 2023
-are successive validation windows; the 2024-01-24 onward test period is used once.
+expanding-window rolling-origin evaluation. A separate clock audit distinguishes
+calendar-date agreement from intraday measurement-time agreement. Calendar years
+2021, 2022, and 2023 are successive validation windows; the 2024-01-24 onward
+test period is held out from fitting and model selection.
 
 本文件可独立读取冻结数据、在各数据自身交易日历内计算收益、执行严格同期合并、
 拟合 OLS 并使用 Newey-West HAC 推断，同时完成诊断、非线性检验、异常值敏感性、
 断点日期敏感性和扩展窗口 rolling-origin 验证。2021、2022、2023 年依次作为验证窗，
-2024-01-24 之后的最终测试集只评估一次，不参与选模。
+并把“日历日期相同”和“日内观测时点相同”分开审计。2024-01-24 之后的最终测试集
+不参与拟合或选模，只用于最终条件拟合评估。
 
 ## Complete analysis code
 
@@ -114,6 +117,11 @@ native_log_return <- function(data, value_name, return_name, sign = 1) {
   )
   names(out)[2:3] <- c(paste0(return_name, "_start"), return_name)
   out
+}
+
+week_end_friday <- function(x) {
+  weekday <- as.POSIXlt(x)$wday
+  as.Date(x + ((5L - weekday) %% 7L))
 }
 
 month_floor <- function(x) as.Date(format(x, "%Y-%m-01"))
@@ -318,9 +326,45 @@ summarize_fx_model <- function(model, analysis_name, data_used, note = "") {
   )
 }
 
+cumulative_fx_summary <- function(model, pre_terms, change_terms, hac_lag,
+                                  specification, frequency = "daily") {
+  vc <- newey_west(model, lag = hac_lag)
+  pre_weights <- setNames(rep(1, length(pre_terms)), pre_terms)
+  change_weights <- setNames(rep(1, length(change_terms)), change_terms)
+  post_weights <- c(pre_weights, change_weights)
+  pre <- linear_test(model, pre_weights, null = -1, vcov_matrix = vc)
+  change <- linear_test(model, change_weights, null = 0, vcov_matrix = vc)
+  post <- linear_test(model, post_weights, null = -1, vcov_matrix = vc)
+  critical <- qt(.975, df.residual(model))
+  data.frame(
+    specification = specification,
+    frequency = frequency,
+    hac_lag = hac_lag,
+    rows = nobs(model),
+    pre_exposure = pre$estimate,
+    pre_se = pre$std_error,
+    pre_conf_low = pre$estimate - critical * pre$std_error,
+    pre_conf_high = pre$estimate + critical * pre$std_error,
+    pre_vs_minus1_p = pre$p_value,
+    post_exposure = post$estimate,
+    post_se = post$std_error,
+    post_conf_low = post$estimate - critical * post$std_error,
+    post_conf_high = post$estimate + critical * post$std_error,
+    post_vs_minus1_p = post$p_value,
+    exposure_change = change$estimate,
+    change_se = change$std_error,
+    change_conf_low = change$estimate - critical * change$std_error,
+    change_conf_high = change$estimate + critical * change$std_error,
+    change_p = change$p_value,
+    row.names = NULL
+  )
+}
+
 ff5 <- read_french_daily(file.path(raw_dir, "Japan_5_Factors_Daily.csv"))
 mom <- read_french_daily(file.path(raw_dir, "Japan_MOM_Factor_Daily.csv"))
 names(mom)[names(mom) == "WML"] <- "MOM"
+ff5$FF_start <- c(as.Date(NA), head(ff5$date, -1L))
+mom$MOM_start <- c(as.Date(NA), head(mom$date, -1L))
 yahoo_hewj_path <- file.path(raw_dir, if (repo_mode) "Yahoo_HEWJ_chart.json" else "Yahoo_HEWJ_original_export.csv")
 yahoo_ewj_path <- file.path(raw_dir, if (repo_mode) "Yahoo_EWJ_chart.json" else "Yahoo_EWJ_original_export.csv")
 hewj <- read_yahoo_adjusted(yahoo_hewj_path, "HEWJ")
@@ -345,11 +389,20 @@ fx_ret <- native_log_return(fx, "DEXJPUS", "JPY_app", sign = -1)
 nikkei_ret <- native_log_return(market[, c("date", "NIKKEI225")], "NIKKEI225", "Nikkei_ret")
 vix_ret <- native_log_return(market[, c("date", "VIXCLS")], "VIXCLS", "dlog_VIX")
 
+# Simple returns are retained only for a return-definition sensitivity analysis.
+# They are exact transformations of the same price ratios, not a second data source.
+hewj_ret$HEWJ_simple <- 100 * expm1(hewj_ret$HEWJ_ret / 100)
+ewj_ret$EWJ_simple <- 100 * expm1(ewj_ret$EWJ_ret / 100)
+fx_ret$JPY_app_simple <- 100 * expm1(fx_ret$JPY_app / 100)
+nikkei_ret$Nikkei_simple <- 100 * expm1(nikkei_ret$Nikkei_ret / 100)
+vix_ret$dVIX_simple <- 100 * expm1(vix_ret$dlog_VIX / 100)
+
 etf_returns <- merge(hewj_ret, ewj_ret, by = "date")
 etf_returns <- etf_returns[etf_returns$HEWJ_ret_start == etf_returns$EWJ_ret_start, ]
 etf_returns$Y <- etf_returns$HEWJ_ret - etf_returns$EWJ_ret
+etf_returns$Y_simple <- etf_returns$HEWJ_simple - etf_returns$EWJ_simple
 names(etf_returns)[names(etf_returns) == "HEWJ_ret_start"] <- "Y_start"
-etf_returns <- etf_returns[, c("date", "Y_start", "Y")]
+etf_returns <- etf_returns[, c("date", "Y_start", "Y", "Y_simple")]
 
 merged <- Reduce(function(x, y) merge(x, y, by = "date"),
                  list(etf_returns, fx_ret, nikkei_ret, vix_ret, ff5, mom))
@@ -364,25 +417,38 @@ merged <- merged[merged$date != as.Date("2020-03-11"), ]
 
 analysis_columns <- c("date", "Y", "JPY_app", "Post", "Nikkei_ret", "SMB", "HML",
                       "RMW", "CMA", "MOM", "dlog_VIX", "rate_diff")
-end_date_aligned <- merged[complete.cases(merged[, analysis_columns]), ]
+simple_columns <- c("Y_simple", "JPY_app_simple", "Nikkei_simple", "dVIX_simple")
+end_date_aligned <- merged[complete.cases(merged[, c(analysis_columns, simple_columns,
+                                                     "FF_start", "MOM_start")]), ]
 joint_interval_match <- end_date_aligned$Y_start == end_date_aligned$JPY_app_start &
   end_date_aligned$Y_start == end_date_aligned$Nikkei_ret_start &
   end_date_aligned$Y_start == end_date_aligned$dlog_VIX_start
-analysis_data <- end_date_aligned[joint_interval_match, analysis_columns]
+analysis_extended <- end_date_aligned[joint_interval_match,
+                                      c(analysis_columns, simple_columns, "Y_start",
+                                        "FF_start", "MOM_start")]
+analysis_data <- analysis_extended[, analysis_columns]
 analysis_data <- analysis_data[order(analysis_data$date), ]
+analysis_extended <- analysis_extended[order(analysis_extended$date), ]
 stopifnot(nrow(analysis_data) >= 1000L)
 stopifnot(nlevels(analysis_data$Post) == 2L)
 
 alignment_audit <- data.frame(
-  series = c("JPY_app", "Nikkei_ret", "dlog_VIX"),
-  native_return_rows = c(nrow(fx_ret), nrow(nikkei_ret), nrow(vix_ret)),
+  series = c("JPY_app", "Nikkei_ret", "dlog_VIX", "Japan_FF5", "Japan_MOM"),
+  source_clock = c("12:00 America/New_York", "Tokyo market close",
+                   "U.S. market close", "Japan trading session", "Japan trading session"),
+  native_return_rows = c(nrow(fx_ret), nrow(nikkei_ret), nrow(vix_ret), nrow(ff5), nrow(mom)),
   candidate_rows_aligned_by_end_date = nrow(end_date_aligned),
   exact_interval_start_matches_Y = c(
     sum(end_date_aligned$JPY_app_start == end_date_aligned$Y_start),
     sum(end_date_aligned$Nikkei_ret_start == end_date_aligned$Y_start),
-    sum(end_date_aligned$dlog_VIX_start == end_date_aligned$Y_start)
+    sum(end_date_aligned$dlog_VIX_start == end_date_aligned$Y_start),
+    sum(end_date_aligned$FF_start == end_date_aligned$Y_start),
+    sum(end_date_aligned$MOM_start == end_date_aligned$Y_start)
   ),
-  final_joint_interval_rows = nrow(analysis_data)
+  final_joint_interval_rows = nrow(analysis_data),
+  # Only source-level dates are available. Even the VIX "close" is not treated
+  # as proof of the ETF's exact adjusted-close timestamp.
+  intraday_clock_matches_etf_close = c(FALSE, FALSE, FALSE, FALSE, FALSE)
 )
 alignment_audit$differing_interval_start <-
   alignment_audit$candidate_rows_aligned_by_end_date - alignment_audit$exact_interval_start_matches_Y
@@ -392,6 +458,13 @@ baseline_formula <- Y ~ JPY_app * Post
 full_model <- lm(full_formula, data = analysis_data)
 baseline_model <- lm(baseline_formula, data = analysis_data)
 end_date_only_model <- lm(full_formula, data = end_date_aligned)
+
+factor_exact_match <- joint_interval_match &
+  end_date_aligned$Y_start == end_date_aligned$FF_start &
+  end_date_aligned$Y_start == end_date_aligned$MOM_start
+factor_exact_data <- end_date_aligned[factor_exact_match, analysis_columns]
+factor_exact_data <- factor_exact_data[order(factor_exact_data$date), ]
+factor_exact_model <- lm(full_formula, data = factor_exact_data)
 
 vcov_hac5 <- newey_west(full_model, lag = 5)
 coef_classic <- coefficient_table(full_model)
@@ -458,6 +531,68 @@ alignment_model_sensitivity <- do.call(rbind, Map(function(alignment_name, model
   )
 }, names(alignment_models), alignment_models))
 
+factor_interval_sensitivity <- rbind(
+  summarize_fx_model(full_model, "Primary price-clock alignment", analysis_data,
+                     "ETF, FX, Nikkei and VIX interval starts match; factor dates match by end date"),
+  summarize_fx_model(factor_exact_model, "All return interval starts match", factor_exact_data,
+                     "Also requires FF5 and MOM inferred previous trading dates to match Y_start")
+)
+
+# FRED DEXJPUS is measured at noon New York while the ETF response is based on
+# U.S. closes. A Dimson-style adjacent-return model estimates the cumulative FX
+# exposure displaced across date labels by non-synchronous clocks. The lead is
+# for explanatory clock reconciliation only and is never used for prediction.
+nonsync_data <- analysis_data
+nonsync_data$JPY_lag1 <- c(NA_real_, head(nonsync_data$JPY_app, -1L))
+nonsync_data$JPY_lead1 <- c(tail(nonsync_data$JPY_app, -1L), NA_real_)
+nonsync_data <- nonsync_data[complete.cases(nonsync_data[, c("JPY_lag1", "JPY_lead1")]), ]
+nonsync_formula <- Y ~ (JPY_lag1 + JPY_app + JPY_lead1) * Post + Nikkei_ret +
+  SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff
+nonsync_model <- lm(nonsync_formula, data = nonsync_data)
+
+current_pre_terms <- c("JPY_app")
+current_change_terms <- c("JPY_app:PostPost")
+nonsync_pre_terms <- c("JPY_lag1", "JPY_app", "JPY_lead1")
+nonsync_change_terms <- c("JPY_lag1:PostPost", "JPY_app:PostPost", "JPY_lead1:PostPost")
+
+# Weekly endpoints use the last date in each Friday-labelled week on which ETF
+# prices and FRED FX are all observed. This does not invent intraday prices; it
+# reduces a few-hour clock mismatch relative to the longer return window.
+common_levels <- Reduce(function(x, y) merge(x, y, by = "date"),
+                        list(hewj[, c("date", "HEWJ")], ewj[, c("date", "EWJ")],
+                             fx[, c("date", "DEXJPUS")]))
+common_levels <- common_levels[complete.cases(common_levels), ]
+common_levels$week_end <- week_end_friday(common_levels$date)
+weekly_endpoints <- do.call(rbind, lapply(split(common_levels, common_levels$week_end), function(block) {
+  block[which.max(block$date), c("date", "HEWJ", "EWJ", "DEXJPUS")]
+}))
+weekly_endpoints <- weekly_endpoints[order(weekly_endpoints$date), ]
+weekly_data <- data.frame(
+  date = weekly_endpoints$date[-1L],
+  interval_start = weekly_endpoints$date[-nrow(weekly_endpoints)],
+  Y = 100 * diff(log(weekly_endpoints$HEWJ / weekly_endpoints$EWJ)),
+  JPY_app = -100 * diff(log(weekly_endpoints$DEXJPUS))
+)
+break_date <- as.Date("2020-03-11")
+weekly_data$Post <- ifelse(weekly_data$date < break_date, "Pre",
+                           ifelse(weekly_data$interval_start > break_date, "Post", NA_character_))
+weekly_data <- weekly_data[!is.na(weekly_data$Post), ]
+weekly_data$Post <- factor(weekly_data$Post, levels = c("Pre", "Post"))
+weekly_model <- lm(Y ~ JPY_app * Post, data = weekly_data)
+
+nonsynchronous_fx_sensitivity <- rbind(
+  cumulative_fx_summary(full_model, current_pre_terms, current_change_terms, 5L,
+                        "Current-date full model", "daily"),
+  cumulative_fx_summary(full_model, current_pre_terms, current_change_terms, 22L,
+                        "Current-date full model", "daily"),
+  cumulative_fx_summary(nonsync_model, nonsync_pre_terms, nonsync_change_terms, 5L,
+                        "Dimson adjacent-return full model", "daily"),
+  cumulative_fx_summary(nonsync_model, nonsync_pre_terms, nonsync_change_terms, 22L,
+                        "Dimson adjacent-return full model", "daily"),
+  cumulative_fx_summary(weekly_model, current_pre_terms, current_change_terms, 4L,
+                        "Last-common-date weekly FX model", "weekly")
+)
+
 resid <- residuals(full_model)
 n <- nobs(full_model)
 primary_diagnostics <- model_diagnostics(full_model)
@@ -472,8 +607,8 @@ jb_p <- primary_diagnostics$jarque_bera_p
 cooks <- cooks.distance(full_model)
 
 # Expanding-window rolling-origin evaluation. Three calendar-year validation
-# windows select the predictive model; the 2024-01-24 onward test set is touched
-# once, only after the winner is locked and refitted on all development data.
+# windows select the predictive model; the 2024-01-24 onward period is excluded
+# from fitting and model selection, then used for final chronological evaluation.
 test_start_date <- as.Date("2024-01-24")
 development <- analysis_data[analysis_data$date < test_start_date, ]
 test <- analysis_data[analysis_data$date >= test_start_date, ]
@@ -521,11 +656,17 @@ selected_model_name <- model_selection_rolling_origin$model[
   which.min(model_selection_rolling_origin$mean_RMSE)]
 selected_model <- lm(candidate_formulas[[selected_model_name]], data = development)
 test_prediction <- as.numeric(predict(selected_model, newdata = test))
+static_fx_model <- lm(Y ~ JPY_app, data = development)
+static_fx_prediction <- as.numeric(predict(static_fx_model, newdata = test))
+theoretical_minus_one_prediction <- -test$JPY_app
 historical_mean_prediction <- rep(mean(development$Y), nrow(test))
 zero_prediction <- rep(0, nrow(test))
 
 test_metrics <- do.call(rbind, lapply(list(
   selected = list(name = paste0("Selected: ", selected_model_name), pred = test_prediction),
+  static_fx = list(name = "Static FX regression benchmark", pred = static_fx_prediction),
+  theoretical = list(name = "Theoretical minus-one spot benchmark",
+                     pred = theoretical_minus_one_prediction),
   historical_mean = list(name = "Historical-mean benchmark", pred = historical_mean_prediction),
   zero = list(name = "Zero-return benchmark", pred = zero_prediction)
 ), function(item) {
@@ -539,6 +680,8 @@ test_predictions <- data.frame(
   actual = test$Y,
   selected_model = selected_model_name,
   predicted = test_prediction,
+  static_fx = static_fx_prediction,
+  theoretical_minus_one = theoretical_minus_one_prediction,
   historical_mean = historical_mean_prediction,
   zero = zero_prediction
 )
@@ -547,8 +690,80 @@ split_summary <- do.call(rbind, lapply(levels(analysis_data$split), function(spl
   data.frame(split = split_name, rows = nrow(block), start_date = min(block$date), end_date = max(block$date),
              purpose = switch(split_name,
                               development = "rolling-origin selection and final refit",
-                              test = "one final held-out evaluation"))
+                              test = "chronological evaluation held out from model selection"))
 }))
+
+# Log returns are exact continuously compounded price-ratio changes. To measure
+# whether their compression of large daily moves matters in this dataset, rerun
+# the identical split and candidate-selection rule with arithmetic returns.
+simple_data <- data.frame(
+  date = analysis_extended$date,
+  Y = analysis_extended$Y_simple,
+  JPY_app = analysis_extended$JPY_app_simple,
+  Post = analysis_extended$Post,
+  Nikkei_ret = analysis_extended$Nikkei_simple,
+  SMB = analysis_extended$SMB,
+  HML = analysis_extended$HML,
+  RMW = analysis_extended$RMW,
+  CMA = analysis_extended$CMA,
+  MOM = analysis_extended$MOM,
+  dlog_VIX = analysis_extended$dVIX_simple,
+  rate_diff = analysis_extended$rate_diff
+)
+simple_development <- simple_data[simple_data$date < test_start_date, ]
+simple_test <- simple_data[simple_data$date >= test_start_date, ]
+simple_rolling_origin_fold_metrics <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
+  do.call(rbind, lapply(seq_len(nrow(rolling_origin_folds)), function(i) {
+    fold_spec <- rolling_origin_folds[i, ]
+    fold_train <- simple_development[simple_development$date <= fold_spec$train_end, ]
+    fold_validation <- simple_development[
+      simple_development$date >= fold_spec$validation_start &
+        simple_development$date <= fold_spec$validation_end, ]
+    fitted_candidate <- lm(candidate_formulas[[model_name]], data = fold_train)
+    metrics <- prediction_metrics(fold_validation$Y,
+                                  predict(fitted_candidate, newdata = fold_validation))
+    data.frame(model = model_name, fold = fold_spec$fold,
+               RMSE = unname(metrics["RMSE"]), MAE = unname(metrics["MAE"]))
+  }))
+}))
+simple_model_selection <- do.call(rbind, lapply(names(candidate_formulas), function(model_name) {
+  rows <- simple_rolling_origin_fold_metrics[
+    simple_rolling_origin_fold_metrics$model == model_name, ]
+  data.frame(model = model_name, mean_RMSE = mean(rows$RMSE), mean_MAE = mean(rows$MAE))
+}))
+simple_selected_model_name <- simple_model_selection$model[
+  which.min(simple_model_selection$mean_RMSE)]
+simple_selected_model <- lm(candidate_formulas[[simple_selected_model_name]],
+                            data = simple_development)
+simple_test_prediction <- as.numeric(predict(simple_selected_model, newdata = simple_test))
+simple_test_score <- prediction_metrics(simple_test$Y, simple_test_prediction)
+simple_full_model <- lm(full_formula, data = simple_data)
+simple_full_summary <- summarize_fx_model(simple_full_model, "Arithmetic returns", simple_data,
+                                          "Same observations and model workflow as log returns")
+log_full_summary <- summarize_fx_model(full_model, "Log returns", analysis_data,
+                                       "Primary continuously compounded definition")
+
+return_definition_sensitivity <- data.frame(
+  definition = c("Log returns", "Arithmetic returns"),
+  selected_model = c(selected_model_name, simple_selected_model_name),
+  rolling_mean_RMSE = c(
+    model_selection_rolling_origin$mean_RMSE[
+      model_selection_rolling_origin$model == selected_model_name],
+    simple_model_selection$mean_RMSE[
+      simple_model_selection$model == simple_selected_model_name]
+  ),
+  test_response_sd = c(sd(test$Y), sd(simple_test$Y)),
+  test_abs_q95 = c(unname(quantile(abs(test$Y), .95)),
+                   unname(quantile(abs(simple_test$Y), .95))),
+  test_abs_max = c(max(abs(test$Y)), max(abs(simple_test$Y))),
+  selected_test_RMSE = c(test_metrics$RMSE[1], unname(simple_test_score["RMSE"])),
+  selected_test_MAE = c(test_metrics$MAE[1], unname(simple_test_score["MAE"])),
+  pre_slope = c(log_full_summary$pre_slope, simple_full_summary$pre_slope),
+  interaction = c(log_full_summary$interaction, simple_full_summary$interaction),
+  interaction_hac5_p = c(log_full_summary$interaction_hac5_p,
+                         simple_full_summary$interaction_hac5_p),
+  post_slope = c(log_full_summary$post_slope, simple_full_summary$post_slope)
+)
 
 stopifnot(max(development$date) < min(test$date))
 stopifnot(all(rolling_origin_folds$train_end < rolling_origin_folds$validation_start))
@@ -767,6 +982,12 @@ write.csv(diagnostics, file.path(inference_results_dir, "diagnostics.csv"), row.
 write.csv(predictor_summary, file.path(inference_results_dir, "predictor_summary.csv"), row.names = FALSE)
 write.csv(alignment_audit, file.path(audit_results_dir, "data_alignment_audit.csv"), row.names = FALSE)
 write.csv(alignment_model_sensitivity, file.path(robustness_results_dir, "data_alignment_sensitivity.csv"), row.names = FALSE)
+write.csv(factor_interval_sensitivity,
+          file.path(robustness_results_dir, "factor_interval_sensitivity.csv"), row.names = FALSE)
+write.csv(nonsynchronous_fx_sensitivity,
+          file.path(robustness_results_dir, "nonsynchronous_fx_sensitivity.csv"), row.names = FALSE)
+write.csv(return_definition_sensitivity,
+          file.path(robustness_results_dir, "return_definition_sensitivity.csv"), row.names = FALSE)
 write.csv(hac_sensitivity, file.path(robustness_results_dir, "hac_lag_sensitivity.csv"), row.names = FALSE)
 write.csv(split_summary, file.path(prediction_results_dir, "split_summary.csv"), row.names = FALSE)
 write.csv(rolling_origin_fold_metrics, file.path(prediction_results_dir, "rolling_origin_fold_metrics.csv"),
@@ -789,6 +1010,8 @@ saveRDS(list(full_model = full_model, baseline_model = baseline_model, hac5 = vc
              selected_model_name = selected_model_name, selected_model = selected_model,
              rolling_origin_fold_metrics = rolling_origin_fold_metrics,
              model_selection_rolling_origin = model_selection_rolling_origin,
+             nonsync_model = nonsync_model, weekly_model = weekly_model,
+             simple_full_model = simple_full_model,
              quadratic_model = quadratic_model, yeo_johnson_model = yj_model,
              yeo_johnson_lambda = selected_lambda, winsorized_model = winsorized_model,
              cooks_trimmed_model = cooks_trimmed_model),
@@ -811,16 +1034,17 @@ split_cols <- c(development = "#1f6aa5", test = "#d94b36")
 plot(analysis_data$date, analysis_data$Y, pch = 16, cex = .35,
      col = adjustcolor(split_cols[as.character(analysis_data$split)], alpha.f = .35),
      xlab = "Date", ylab = "Daily return spread (%)",
-     main = "Development period and untouched final test")
+     main = "Development period and held-out-from-selection evaluation")
 abline(v = as.numeric(max(development$date)), lty = 2, col = "grey35")
-legend("topright", legend = names(split_cols), col = split_cols, pch = 16, bty = "n")
+legend("topright", legend = c("development", "held out from selection"),
+       col = split_cols, pch = 16, bty = "n")
 dev.off()
 
 png(file.path(prediction_figures_dir, "rolling_origin_folds.png"), width = 1800, height = 1050, res = 180)
 par(mar = c(5.1, 9.2, 4.1, 2.1))
 plot(as.Date(c("2014-01-01", "2026-08-01")), c(0.5, 4.5), type = "n", yaxt = "n",
      xlab = "Date", ylab = "", main = "Expanding-window rolling-origin design")
-axis(2, at = 1:4, labels = c(rolling_origin_folds$fold, "Final test"), las = 1)
+axis(2, at = 1:4, labels = c(rolling_origin_folds$fold, "Final evaluation"), las = 1)
 for (i in seq_len(nrow(rolling_origin_folds))) {
   segments(min(development$date), i, rolling_origin_folds$train_end[i], i,
            col = "#1f6aa5", lwd = 10)
@@ -828,7 +1052,7 @@ for (i in seq_len(nrow(rolling_origin_folds))) {
            rolling_origin_folds$validation_end[i], i, col = "#e69f00", lwd = 10)
 }
 segments(min(test$date), 4, max(test$date), 4, col = "#d94b36", lwd = 10)
-legend("bottomright", legend = c("Expanding train", "Validation", "Untouched test"),
+legend("bottomright", legend = c("Expanding train", "Validation", "Held out from selection"),
        col = c("#1f6aa5", "#e69f00", "#d94b36"), lwd = 7, bty = "n")
 dev.off()
 
@@ -976,6 +1200,37 @@ text(selected_lambda, max(lambda_profile$profile_score), sprintf("lambda=%.2f", 
      pos = 4, cex = .8)
 dev.off()
 
+png(file.path(diagnostics_figures_dir, "time_and_return_definition_sensitivity.png"),
+    width = 1900, height = 1050, res = 180)
+par(mfrow = c(1, 2), mar = c(5.5, 4.5, 3.2, 1.2))
+clock_rows <- nonsynchronous_fx_sensitivity[c(1, 4, 5), ]
+clock_labels <- c("Daily current\nHAC(5)", "Daily Dimson\nHAC(22)", "Weekly common\nHAC(4)")
+x_positions <- seq_len(nrow(clock_rows))
+plot(x_positions - .08, clock_rows$pre_exposure, pch = 19, col = "#1f6aa5",
+     xlim = c(.55, 3.45), ylim = range(c(clock_rows$pre_conf_low, clock_rows$pre_conf_high,
+                                         clock_rows$post_conf_low, clock_rows$post_conf_high, -1)),
+     xaxt = "n", xlab = "Clock treatment", ylab = "Cumulative JPY exposure",
+     main = "Clock-alignment sensitivity")
+segments(x_positions - .08, clock_rows$pre_conf_low,
+         x_positions - .08, clock_rows$pre_conf_high, col = "#1f6aa5", lwd = 2)
+points(x_positions + .08, clock_rows$post_exposure, pch = 17, col = "#d94b36")
+segments(x_positions + .08, clock_rows$post_conf_low,
+         x_positions + .08, clock_rows$post_conf_high, col = "#d94b36", lwd = 2)
+axis(1, at = x_positions, labels = clock_labels)
+abline(h = -1, lty = 2, col = "grey40")
+legend("bottomright", legend = c("Pre", "Post", "Minus-one reference"),
+       col = c("#1f6aa5", "#d94b36", "grey40"), pch = c(19, 17, NA),
+       lty = c(NA, NA, 2), bty = "n")
+
+metric_matrix <- rbind(return_definition_sensitivity$test_response_sd,
+                       return_definition_sensitivity$selected_test_RMSE)
+barplot(metric_matrix, beside = TRUE, names.arg = c("Log", "Arithmetic"),
+        col = c("#1f6aa5", "#e69f00"), ylab = "Percentage points",
+        main = "Does log scaling suppress test variation?")
+legend("topright", legend = c("Test response SD", "Selected-model RMSE"),
+       fill = c("#1f6aa5", "#e69f00"), bty = "n")
+dev.off()
+
 png(file.path(diagnostics_figures_dir, "influence_diagnostics.png"), width = 1800, height = 1100, res = 180)
 plot(analysis_data$date, cooks, type = "h", col = adjustcolor("#1f6aa5", alpha.f = .7),
      xlab = "Date", ylab = "Cook's distance", main = "Influence screening; primary model retains all dates")
@@ -1016,8 +1271,20 @@ log_lines <- c(
   "Rolling-origin model selection:",
   paste(capture.output(print(model_selection_rolling_origin, row.names = FALSE, digits = 7)), collapse = "\n"),
   "",
-  "Untouched held-out test:",
+  "Final period held out from fitting and model selection:",
   paste(capture.output(print(test_metrics, row.names = FALSE, digits = 7)), collapse = "\n"),
+  "",
+  "Non-synchronous clock sensitivity:",
+  paste(capture.output(print(nonsynchronous_fx_sensitivity, row.names = FALSE, digits = 7)),
+        collapse = "\n"),
+  "",
+  "Factor-interval sensitivity:",
+  paste(capture.output(print(factor_interval_sensitivity, row.names = FALSE, digits = 7)),
+        collapse = "\n"),
+  "",
+  "Log-versus-arithmetic return sensitivity:",
+  paste(capture.output(print(return_definition_sensitivity, row.names = FALSE, digits = 7)),
+        collapse = "\n"),
   "",
   "Functional-form sensitivity (rolling-origin; held-out decision not reopened):",
   paste(capture.output(print(functional_form_sensitivity, row.names = FALSE, digits = 7)), collapse = "\n"),
@@ -1058,12 +1325,12 @@ knitr::kable(model_selection_rolling_origin, digits = 6,
 
 `selected_model_name` records the candidate with the lowest mean RMSE across the
 three rolling-origin folds. It is refitted on every development observation
-through 2024-01-23 and evaluated exactly once on the untouched test set.
+through 2024-01-23 and evaluated on the test set held out from fitting and selection.
 Variables are therefore removed by a predeclared out-of-sample rule, not by
 individual p-values or by inspecting the test result.
 
 最终预测模型由三个滚动验证窗的平均 RMSE 决定，再用截至 2024-01-23 的全部开发
-数据重新拟合，并只在未接触测试集上评估一次。删减依据是预设样本外规则，而不是
+数据重新拟合，并在未参与拟合或选模的测试集上评估。删减依据是预设样本外规则，而不是
 单个 p 值或测试集结果。
 
 ## Main results / 主要结果
@@ -1074,7 +1341,7 @@ main_slopes <- hypothesis_tests[hypothesis_tests$inference == "Newey-West HAC(5)
                                 c("period", "estimate", "std_error", "p_value")]
 main_table <- data.frame(
   result = c("Pre-period slope", "Post-period slope", "Slope change (Post interaction)",
-             "Full-model R-squared", "Held-out selected-model RMSE", "Held-out mean-benchmark RMSE"),
+             "Full-model R-squared", "Held-out selected-model RMSE", "Held-out static-FX RMSE"),
   estimate = c(main_slopes$estimate[main_slopes$period == "Pre-pandemic"],
                main_slopes$estimate[main_slopes$period == "Post-pandemic"],
                main_interaction$estimate, summary(full_model)$r.squared,
@@ -1096,6 +1363,43 @@ observed predictors and is not a tradable ahead-of-time forecast.
 HAC(5) 下交互项在 5% 水平不显著，因此主模型不足以证明疫情前后斜率稳定改变；
 两个分时期斜率都显著不同于完全对冲基准 -1。锁定模型在留出集上优于朴素基准，
 但使用了当日已观测变量，不是可交易的提前预测。
+
+## Market clocks and return definition / 市场时钟与收益定义
+
+The primary merge makes interval dates exact, but it does not pretend that all
+values are observed at the same intraday instant: DEXJPUS is a New York-noon
+rate, the ETFs and VIX are U.S. closes, and Nikkei is a Tokyo close. We therefore
+report (i) current-date estimates, (ii) a Dimson lead/current/lag cumulative yen
+exposure with HAC(5) and HAC(22), and (iii) a weekly last-common-date estimate.
+The FX lead is used only to diagnose nonsynchronous measurement, never for the
+prediction exercise. Factor start-date matching is audited separately.
+
+主合并保证收益区间的日历起止日期一致，但不会把不同日内时点伪称为完全同步：
+DEXJPUS 是纽约中午报价，ETF 与 VIX 是美国收盘值，Nikkei 是东京收盘值。因此报告
+当日模型、Dimson 前一期/当期/后一期累计日元暴露（HAC(5) 与 HAC(22)）以及每周最后
+共同日期模型。FX lead 只用于诊断非同步观测，绝不进入预测。因子区间另行审计。
+
+```{r time-and-return-tables, echo=FALSE}
+knitr::kable(nonsynchronous_fx_sensitivity, digits = 6,
+             caption = "Market-clock sensitivity of cumulative FX exposure")
+knitr::kable(return_definition_sensitivity, digits = 6,
+             caption = "Exact log-return versus arithmetic-return rerun")
+knitr::kable(factor_interval_sensitivity, digits = 6,
+             caption = "Factor interval-start sensitivity")
+```
+
+Log returns are exact transformations, not approximations used by the code.
+To test whether they conceal volatility, the entire selection, test, and
+inference workflow is rerun with arithmetic percentage returns. Test response
+SD is 0.65378 for log returns and 0.65316 for arithmetic returns; selected-model
+RMSE is 0.31589 versus 0.31673. Thus log returns do not materially smooth this
+test period. They slightly reduce the single largest absolute move (2.78024
+versus 2.81234), while the 95th percentiles are essentially identical.
+
+log 收益在代码中是精确变换，不是近似值。为检验它是否掩盖波动，完整选模、测试和
+推断流程又用普通百分比收益重跑。测试响应标准差分别为 0.65378 与 0.65316，所选
+模型 RMSE 分别为 0.31589 与 0.31673。因此 log 并未实质压低测试期总体波动；它只让
+单个最大绝对波动略小，而 95% 分位几乎不变。
 
 ## Assumption diagnostics / 假设诊断
 
@@ -1177,6 +1481,7 @@ figure_files <- file.path(figures_dir, c(
   "prediction/model_fx_interaction_rolling_rmse.png",
   "prediction/model_macro_controls_rolling_rmse.png",
   "prediction/model_full_factor_rolling_rmse.png",
+  "diagnostics/time_and_return_definition_sensitivity.png",
   "prediction/heldout_test_predictions.png",
   "diagnostics/residual_diagnostics.png",
   "diagnostics/robustness_sensitivity.png",

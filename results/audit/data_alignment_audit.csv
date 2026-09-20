@@ -1,4 +1,6 @@
-"series","native_return_rows","candidate_rows_aligned_by_end_date","exact_interval_start_matches_Y","final_joint_interval_rows","differing_interval_start"
-"JPY_app",13959,2925,2879,2655,46
-"Nikkei_ret",19203,2925,2675,2655,250
-"dlog_VIX",9275,2925,2893,2655,32
+"series","source_clock","native_return_rows","candidate_rows_aligned_by_end_date","exact_interval_start_matches_Y","final_joint_interval_rows","intraday_clock_matches_etf_close","differing_interval_start"
+"JPY_app","12:00 America/New_York",13959,2925,2879,2655,FALSE,46
+"Nikkei_ret","Tokyo market close",19203,2925,2675,2655,FALSE,250
+"dlog_VIX","U.S. market close",9275,2925,2893,2655,FALSE,32
+"Japan_FF5","Japan trading session",9415,2925,2819,2655,FALSE,106
+"Japan_MOM","Japan trading session",9327,2925,2819,2655,FALSE,106

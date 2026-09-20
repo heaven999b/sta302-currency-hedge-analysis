@@ -9,7 +9,7 @@ Everything executable is kept under this directory. Start with
 
 | File | Purpose |
 |---|---|
-| `analysis/run_analysis.R` | Reads frozen sources, constructs exact-interval daily data, fits OLS and HAC models, runs rolling-origin evaluation and sensitivity analyses, and writes every CSV/RDS/figure result. |
+| `analysis/run_analysis.R` | Reads frozen sources, constructs calendar-interval-matched data, audits market clocks, fits OLS/HAC and Dimson/weekly models, reruns arithmetic returns, performs rolling-origin evaluation and other sensitivities, and writes every CSV/RDS/figure result. |
 | `analysis/STA302_Project_Analysis.Rmd` | Standalone course-facing R Markdown containing the complete analysis code plus interpretation and figures. |
 
 ## Pipeline / 构建与验证代码

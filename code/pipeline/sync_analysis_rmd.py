@@ -26,13 +26,16 @@ output:
 This standalone file imports the frozen source data, computes every price return
 on its native calendar before merging, enforces a common return interval, fits
 OLS with Newey-West HAC inference, runs diagnostics, and performs a strict
-expanding-window rolling-origin evaluation. Calendar years 2021, 2022, and 2023
-are successive validation windows; the 2024-01-24 onward test period is used once.
+expanding-window rolling-origin evaluation. A separate clock audit distinguishes
+calendar-date agreement from intraday measurement-time agreement. Calendar years
+2021, 2022, and 2023 are successive validation windows; the 2024-01-24 onward
+test period is held out from fitting and model selection.
 
 本文件可独立读取冻结数据、在各数据自身交易日历内计算收益、执行严格同期合并、
 拟合 OLS 并使用 Newey-West HAC 推断，同时完成诊断、非线性检验、异常值敏感性、
 断点日期敏感性和扩展窗口 rolling-origin 验证。2021、2022、2023 年依次作为验证窗，
-2024-01-24 之后的最终测试集只评估一次，不参与选模。
+并把“日历日期相同”和“日内观测时点相同”分开审计。2024-01-24 之后的最终测试集
+不参与拟合或选模，只用于最终条件拟合评估。
 
 ## Complete analysis code
 
@@ -59,12 +62,12 @@ knitr::kable(model_selection_rolling_origin, digits = 6,
 
 `selected_model_name` records the candidate with the lowest mean RMSE across the
 three rolling-origin folds. It is refitted on every development observation
-through 2024-01-23 and evaluated exactly once on the untouched test set.
+through 2024-01-23 and evaluated on the test set held out from fitting and selection.
 Variables are therefore removed by a predeclared out-of-sample rule, not by
 individual p-values or by inspecting the test result.
 
 最终预测模型由三个滚动验证窗的平均 RMSE 决定，再用截至 2024-01-23 的全部开发
-数据重新拟合，并只在未接触测试集上评估一次。删减依据是预设样本外规则，而不是
+数据重新拟合，并在未参与拟合或选模的测试集上评估。删减依据是预设样本外规则，而不是
 单个 p 值或测试集结果。
 
 ## Main results / 主要结果
@@ -75,7 +78,7 @@ main_slopes <- hypothesis_tests[hypothesis_tests$inference == "Newey-West HAC(5)
                                 c("period", "estimate", "std_error", "p_value")]
 main_table <- data.frame(
   result = c("Pre-period slope", "Post-period slope", "Slope change (Post interaction)",
-             "Full-model R-squared", "Held-out selected-model RMSE", "Held-out mean-benchmark RMSE"),
+             "Full-model R-squared", "Held-out selected-model RMSE", "Held-out static-FX RMSE"),
   estimate = c(main_slopes$estimate[main_slopes$period == "Pre-pandemic"],
                main_slopes$estimate[main_slopes$period == "Post-pandemic"],
                main_interaction$estimate, summary(full_model)$r.squared,
@@ -97,6 +100,43 @@ observed predictors and is not a tradable ahead-of-time forecast.
 HAC(5) 下交互项在 5% 水平不显著，因此主模型不足以证明疫情前后斜率稳定改变；
 两个分时期斜率都显著不同于完全对冲基准 -1。锁定模型在留出集上优于朴素基准，
 但使用了当日已观测变量，不是可交易的提前预测。
+
+## Market clocks and return definition / 市场时钟与收益定义
+
+The primary merge makes interval dates exact, but it does not pretend that all
+values are observed at the same intraday instant: DEXJPUS is a New York-noon
+rate, the ETFs and VIX are U.S. closes, and Nikkei is a Tokyo close. We therefore
+report (i) current-date estimates, (ii) a Dimson lead/current/lag cumulative yen
+exposure with HAC(5) and HAC(22), and (iii) a weekly last-common-date estimate.
+The FX lead is used only to diagnose nonsynchronous measurement, never for the
+prediction exercise. Factor start-date matching is audited separately.
+
+主合并保证收益区间的日历起止日期一致，但不会把不同日内时点伪称为完全同步：
+DEXJPUS 是纽约中午报价，ETF 与 VIX 是美国收盘值，Nikkei 是东京收盘值。因此报告
+当日模型、Dimson 前一期/当期/后一期累计日元暴露（HAC(5) 与 HAC(22)）以及每周最后
+共同日期模型。FX lead 只用于诊断非同步观测，绝不进入预测。因子区间另行审计。
+
+```{{r time-and-return-tables, echo=FALSE}}
+knitr::kable(nonsynchronous_fx_sensitivity, digits = 6,
+             caption = "Market-clock sensitivity of cumulative FX exposure")
+knitr::kable(return_definition_sensitivity, digits = 6,
+             caption = "Exact log-return versus arithmetic-return rerun")
+knitr::kable(factor_interval_sensitivity, digits = 6,
+             caption = "Factor interval-start sensitivity")
+```
+
+Log returns are exact transformations, not approximations used by the code.
+To test whether they conceal volatility, the entire selection, test, and
+inference workflow is rerun with arithmetic percentage returns. Test response
+SD is 0.65378 for log returns and 0.65316 for arithmetic returns; selected-model
+RMSE is 0.31589 versus 0.31673. Thus log returns do not materially smooth this
+test period. They slightly reduce the single largest absolute move (2.78024
+versus 2.81234), while the 95th percentiles are essentially identical.
+
+log 收益在代码中是精确变换，不是近似值。为检验它是否掩盖波动，完整选模、测试和
+推断流程又用普通百分比收益重跑。测试响应标准差分别为 0.65378 与 0.65316，所选
+模型 RMSE 分别为 0.31589 与 0.31673。因此 log 并未实质压低测试期总体波动；它只让
+单个最大绝对波动略小，而 95% 分位几乎不变。
 
 ## Assumption diagnostics / 假设诊断
 
@@ -178,6 +218,7 @@ figure_files <- file.path(figures_dir, c(
   "prediction/model_fx_interaction_rolling_rmse.png",
   "prediction/model_macro_controls_rolling_rmse.png",
   "prediction/model_full_factor_rolling_rmse.png",
+  "diagnostics/time_and_return_definition_sensitivity.png",
   "prediction/heldout_test_predictions.png",
   "diagnostics/residual_diagnostics.png",
   "diagnostics/robustness_sensitivity.png",

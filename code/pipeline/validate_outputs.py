@@ -86,6 +86,29 @@ def validate_analysis() -> None:
             "Held-out model was not locked on rolling-origin validation")
     require(float(test[0]["RMSE"]) < min(float(row["RMSE"]) for row in test[1:]),
             "Selected model does not beat held-out benchmarks")
+    require({"Static FX regression benchmark", "Theoretical minus-one spot benchmark",
+             "Historical-mean benchmark", "Zero-return benchmark"}.issubset(
+                {row["model"] for row in test}),
+            "Held-out benchmark set is incomplete")
+
+    alignment = read_rows(ROOT / "results" / "audit" / "data_alignment_audit.csv")
+    require({row["series"] for row in alignment} ==
+            {"JPY_app", "Nikkei_ret", "dlog_VIX", "Japan_FF5", "Japan_MOM"},
+            "Clock audit does not cover every source family")
+    require(all(int(row["final_joint_interval_rows"]) == len(data) for row in alignment),
+            "Clock audit final-sample count changed")
+
+    nonsync = read_rows(ROOT / "results" / "robustness" / "nonsynchronous_fx_sensitivity.csv")
+    require(len(nonsync) == 5 and {row["specification"] for row in nonsync} ==
+            {"Current-date full model", "Dimson adjacent-return full model",
+             "Last-common-date weekly FX model"},
+            "Time-clock sensitivity is incomplete")
+    return_def = read_rows(ROOT / "results" / "robustness" / "return_definition_sensitivity.csv")
+    require([row["definition"] for row in return_def] == ["Log returns", "Arithmetic returns"],
+            "Return-definition sensitivity is incomplete")
+    return_sds = [float(row["test_response_sd"]) for row in return_def]
+    require(max(return_sds) / min(return_sds) < 1.01,
+            "Log/arithmetic test volatility diverges unexpectedly")
 
     functional = read_rows(ROOT / "results" / "robustness" / "functional_form_sensitivity.csv")
     require(len(functional) == 3, "Functional-form sensitivity must contain three specifications")
@@ -139,6 +162,7 @@ def validate_artifacts() -> None:
         ROOT / "figures" / "inference" / "hac_lag_sensitivity.png",
         ROOT / "figures" / "diagnostics" / "robustness_sensitivity.png",
         ROOT / "figures" / "diagnostics" / "influence_diagnostics.png",
+        ROOT / "figures" / "diagnostics" / "time_and_return_definition_sensitivity.png",
         ROOT / "results" / "audit" / "R_run_log.txt",
         ROOT / "results" / "audit" / "ARTIFACT_MANIFEST.csv",
     ]
@@ -182,7 +206,11 @@ def validate_artifacts() -> None:
         "code/analysis/run_analysis.R",
         "config/analysis_protocol.yml",
         "data/processed/sta302_daily_analysis.csv",
+        "data/TIME_ALIGNMENT.csv",
         "results/robustness/functional_form_sensitivity.csv",
+        "results/robustness/nonsynchronous_fx_sensitivity.csv",
+        "results/robustness/return_definition_sensitivity.csv",
+        "results/robustness/factor_interval_sensitivity.csv",
         "results/prediction/rolling_origin_fold_metrics.csv",
         "results/prediction/model_selection_rolling_origin.csv",
         "results/robustness/influence_sensitivity.csv",
@@ -229,7 +257,7 @@ def main() -> None:
     validate_analysis()
     validate_artifacts()
     validate_submission()
-    print("VALIDATION PASSED: raw/CSV hashes, aligned analysis, rolling-origin selection, locked held-out results, nonlinear/influence/break sensitivity, figures, PDFs, standalone Rmd, and artifact manifest are consistent.")
+    print("VALIDATION PASSED: raw/CSV hashes, interval/clock alignment, rolling-origin selection, locked held-out results, time/return-definition/nonlinear/influence/break sensitivity, figures, PDFs, standalone Rmd, and artifact manifest are consistent.")
 
 
 if __name__ == "__main__":

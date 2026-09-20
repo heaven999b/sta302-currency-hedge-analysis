@@ -1,0 +1,3 @@
+"analysis","rows","r_squared","pre_slope","pre_slope_vs_minus1_p","interaction","interaction_hac5_p","post_slope","post_slope_vs_minus1_p","note"
+"Primary price-clock alignment",2655,0.703818792797337,-0.850936443698603,0.00000495386454357664,-0.0612064199953553,0.104391107292676,-0.912142863693958,0.0000480479562800911,"ETF, FX, Nikkei and VIX interval starts match; factor dates match by end date"
+"All return interval starts match",2654,0.703924553842832,-0.851014266330978,0.00000502405801594907,-0.0611237641846063,0.104896185285869,-0.912138030515584,0.0000480182227983671,"Also requires FF5 and MOM inferred previous trading dates to match Y_start"

@@ -1,10 +1,17 @@
-protocol_version: 4
+protocol_version: 5
 frozen_on: 2026-09-21
 research_question: "Does the HEWJ-minus-EWJ daily return spread offset yen appreciation, and did the conditional slope change after 2020-03-11?"
 data:
   frequency: daily
   return_definition: "100 * log price difference"
   alignment: "compute within each native series, merge on end date, require identical interval start"
+  clock_semantics:
+    HEWJ_EWJ: "U.S. adjusted close; Yahoo timestamp is treated as a session label"
+    DEXJPUS: "12:00 America/New_York noon buying rate"
+    Nikkei_225: "Tokyo market close"
+    VIX: "U.S. market close"
+    Japan_factors: "Japan trading-session return; previous factor date is inferred and audited"
+  timezone_policy: "never treat equal calendar dates as proof of equal intraday clocks"
   pandemic_transition_date_excluded: 2020-03-11
   raw_snapshots: "frozen under data/raw and verified by SHA-256 before analysis"
   csv_exports: "deterministic copies under data/original_csv; Yahoo JSON is converted without changing observations"
@@ -16,6 +23,15 @@ inference:
   sensitivity_lags: [1, 10]
   alpha: 0.05
 robustness:
+  time_alignment:
+    primary: "native-calendar return intervals with identical start/end dates"
+    nonsynchronous_correction: "Dimson-style one adjacent lag, current, and one adjacent lead; report summed exposure"
+    covariance_sensitivity: "HAC(5) and HAC(22) for daily clock-corrected model"
+    weekly_check: "last common HEWJ/EWJ/DEXJPUS observation in each Friday-labelled week"
+    prediction_boundary: "FX leads are explanatory clock-reconciliation terms and never enter prediction"
+  return_definition:
+    primary: "continuously compounded log returns"
+    sensitivity: "arithmetic returns using the same observations, candidates, rolling folds, and final period"
   nonlinear:
     quadratic: "add JPY_app^2 and JPY_app^2 x Post while preserving hierarchy"
     yeo_johnson_lambda_grid: {minimum: -2.0, maximum: 2.0, step: 0.05}
@@ -33,20 +49,20 @@ robustness:
     rule: "for each candidate, omit that date and define Post as dates strictly after it"
 prediction:
   role: secondary
-  split: expanding-window rolling-origin with untouched final test
+  split: expanding-window rolling-origin with final test held out from fitting and selection
   final_test: {start: 2024-01-24, end: 2026-07-31}
   rolling_origin_folds:
     - {train_end: 2020-12-31, validation_start: 2021-01-01, validation_end: 2021-12-31}
     - {train_end: 2021-12-31, validation_start: 2022-01-01, validation_end: 2022-12-31}
     - {train_end: 2022-12-31, validation_start: 2023-01-01, validation_end: 2023-12-31}
   selection_metric: mean validation RMSE across folds
-  test_policy: "select using rolling-origin validation, refit on all data through 2024-01-23, then evaluate final test once"
+  test_policy: "select using rolling-origin validation, refit on all data through 2024-01-23, then evaluate the later period without using it for fitting or selection"
   candidates:
     - {name: "FX interaction", formula: "Y ~ JPY_app * Post"}
     - {name: "Macro controls", formula: "Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff"}
     - {name: "Full factor model", formula: "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"}
   locked_winner: "FX interaction"
-  benchmarks: [historical_mean, zero_return]
+  benchmarks: [static_fx_regression, theoretical_minus_one_spot, historical_mean, zero_return]
 randomness:
   stochastic_steps: false
   seed: null

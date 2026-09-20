@@ -4,7 +4,7 @@
 
 All price returns are computed inside their original series before merging. The
 primary sample then requires HEWJ/EWJ, USD/JPY, Nikkei 225, and VIX returns to
-share the same interval start and end dates. This produces 2,655 observations.
+share the same calendar interval start and end dates. This produces 2,655 observations.
 The less strict same-end-date rule produces 2,925 observations and is retained
 only as a sensitivity analysis.
 
@@ -18,6 +18,56 @@ HAC(5). HAC(1) and HAC(10) are reported as prespecified sensitivity checks.
 
 主条件均值模型仍用 OLS 估计系数；由于残差检验拒绝 iid，主要置信区间和
 p 值使用 Newey-West HAC(5)，并报告 HAC(1) 与 HAC(10) 敏感性结果。
+
+## Time-zone and market-clock design / 时区与市场时钟设计
+
+Calendar alignment is not claimed to be intraday synchronization. HEWJ/EWJ and
+VIX are U.S.-close observations; DEXJPUS is measured at New York noon; Nikkei is
+a Tokyo-close series; the Japanese factors describe their local trading session.
+The repository records these clocks and time zones in `data/TIME_ALIGNMENT.csv`.
+No automatic reassignment to another calendar day is performed, because that
+would falsely imply one common observation time.
+
+The clock issue is handled in three layers. First, the primary same-calendar-
+interval model is retained as the transparent course model. Second, a Dimson
+specification includes lagged, current, and leading yen returns and reports their
+cumulative exposure; the lead is diagnostic only and is never used in prediction.
+Third, a weekly model uses the last date on which HEWJ, EWJ, and DEXJPUS are all
+observed within each Friday-labelled week. HAC(5) and HAC(22) are both reported.
+
+日期对齐不等于日内同步。本研究不会把所有序列自动归到某个统一“交易日”，也不会
+仅把日期机械转换为 UTC，因为这会虚构一个并不存在的共同观测时点。具体来源时钟与
+时区记录在 `data/TIME_ALIGNMENT.csv`。处理分三层：保留透明的同日历区间主模型；
+用前一期、当期、后一期日元收益的 Dimson 累计暴露吸收非同步交易；再用每周最后共同
+观测日重估。lead 只作诊断，绝不进入预测；同时报告 HAC(5) 与 HAC(22)。
+
+Current-date post-period exposure is -0.91214. Dimson cumulative exposure is
+-0.99410 (HAC(22) 95% CI [-1.03465, -0.95356]), and the weekly common-date
+estimate is -0.98633 ([-1.01568, -0.95697]). Both are statistically compatible
+with -1. Thus the daily current-date model understates full cumulative yen
+exposure; an unqualified “incomplete hedge” claim does not survive the clock
+correction.
+
+同日模型疫情后斜率为 -0.91214；Dimson 累计暴露为 -0.99410（HAC(22) 95% CI
+[-1.03465, -0.95356]），周度共同日期估计为 -0.98633（[-1.01568, -0.95697]），
+两者都不能拒绝 -1。因此日度同日模型低估了完整累计日元暴露；“稳定存在不完全对冲”
+不能脱离非同步时钟限定来表述。
+
+## Log versus arithmetic returns / 对数与普通收益
+
+Log returns are computed exactly as `100 * log(P_t/P_{t-1})`; they are not a
+numerical approximation. The entire selection, held-out evaluation, and
+full-model inference workflow is also rerun with exact arithmetic returns.
+Test response SD is 0.65378 for log returns and 0.65316 for arithmetic returns;
+the 95th-percentile absolute moves are 1.34703 and 1.34734, and maxima are
+2.78024 and 2.81234. Selected-model RMSE is 0.31589 versus 0.31673. Therefore
+log returns do not materially suppress overall test volatility here; they only
+compress the largest extreme very slightly.
+
+log 收益按精确公式计算，另用普通收益完整重跑。测试响应标准差分别为 0.65378 与
+0.65316，绝对波动 95% 分位分别为 1.34703 与 1.34734，最大值为 2.78024 与
+2.81234，所选模型 RMSE 为 0.31589 与 0.31673。因此 log 没有实质压低整体测试波动，
+只对最大极端值产生很小的非线性压缩。
 
 ## Initial and final model roles / 初始模型与最终模型职责
 
@@ -33,7 +83,7 @@ and 2022 were scored on 2021, 2022, and 2023. Mean RMSE was 0.26665 for the
 FX-interaction model, 0.27417 for macro controls, and 0.27637 for the full factor
 model. The FX-interaction model therefore won under the locked rule and has
 formula `Y ~ JPY_app * Post`. It was refitted on all 2,124 development rows
-through 2024-01-23 before one untouched-test evaluation. Reduction was selected
+through 2024-01-23 before evaluation on data held out from fitting and selection. Reduction was selected
 by time-respecting out-of-sample RMSE, not by deleting insignificant coefficients.
 
 本研究刻意区分解释性推断和预测。初始完整模型为
@@ -43,7 +93,7 @@ by time-respecting out-of-sample RMSE, not by deleting insignificant coefficient
 训练，并在 2021、2022、2023 年验证。汇率交互、宏观控制和完整因子模型的三折平均
 RMSE 分别为 0.26665、0.27417 和 0.27637，因此锁定汇率交互模型
 `Y ~ JPY_app * Post`。该模型用截至 2024-01-23 的 2,124 条开发样本重新拟合后，
-只在未接触测试集上评估一次。精简依据是遵守时间顺序的样本外 RMSE，而不是 p 值。
+在未参与拟合或选模的测试集上评估。精简依据是遵守时间顺序的样本外 RMSE，而不是 p 值。
 
 ## Main inference / 主要推断
 
@@ -52,23 +102,25 @@ RMSE 分别为 0.26665、0.27417 和 0.27637，因此锁定汇率交互模型
 - Change in slope: -0.06121; classical p = 0.00931, HAC(5) p = 0.10439.
 - HAC interaction p-values are 0.10287, 0.10439, and 0.10635 for lags 1, 5, and 10.
 
-因此，疫情后斜率在数值上更接近 -1，但使用适合非 iid 残差的 HAC 推断后，
-没有足够证据认定疫情前后斜率发生变化。两个时期的斜率都显著不同于 -1，
-所以更稳妥的结论是：两个时期均存在不完全对冲，而不是疫情导致了显著变化。
+因此，疫情后同日斜率在数值上更接近 -1，但使用适合非 iid 残差的 HAC 推断后，
+没有足够证据认定疫情前后斜率发生变化。两个时期的同日斜率都显著不同于 -1；
+但如上所述，时钟修正后的累计暴露与 -1 相容，不能把同日结论直接推广到完整暴露。
 
 ## Rolling-origin prediction check / 滚动起点预测检验
 
 The three validation windows contain 211, 211, and 217 observations. The
 FX-interaction candidate has the lowest mean validation RMSE (0.26665) and is
 locked before test evaluation. After refitting on all development data, its
-test RMSE is 0.31589 and MAE is 0.21576, compared with 0.65316 and 0.46087 for
-the historical-mean benchmark.
+test RMSE is 0.31589 and MAE is 0.21576. It is only marginally better than the
+static-FX benchmark (RMSE 0.31624, MAE 0.21604) and theoretical -1 spot
+benchmark (0.32104, 0.21918), while strongly beating the historical mean.
 This is a held-out conditional-fit check using same-day observed predictors, not
 an ahead-of-time return forecast or trading backtest.
 
 三个验证窗分别有 211、211、217 条观测。汇率交互模型的三折平均 RMSE 最低
 （0.26665），因此在查看测试结果前锁定；用全部开发数据重拟合后，其测试 RMSE
-为 0.31589、MAE 为 0.21576，明显优于历史均值基准的 0.65316 和 0.46087。
+为 0.31589、MAE 为 0.21576，仅略优于静态汇率基准（0.31624、0.21604）和理论
+-1 即期暴露基准（0.32104、0.21918），但明显优于历史均值基准。
 该结果是使用当日已观测预测变量的样本外条件拟合检查，不是提前收益预测或交易回测。
 
 ## Diagnostics and limits / 诊断与限制
@@ -146,13 +198,13 @@ artifact hash manifest are generated by `code/pipeline/run_all.sh`.
 
 ## Final conclusion / 最终结论
 
-The strongest conclusion is that HEWJ does not deliver a complete one-for-one
-daily yen hedge relative to EWJ in either period. The post-period slope is closer
-to -1, but evidence that the pandemic break caused or even cleanly marks a slope
-change is not robust across the declared influence and date sensitivities. This
-is an associational result for one ETF pair, not a causal estimate or trading
-recommendation.
+The current-date model shows slopes short of -1, but the Dimson and weekly clock
+corrections recover cumulative post-period exposures statistically compatible
+with -1. The defensible conclusion is narrower: same-date daily exposure appears
+incomplete, while cumulative exposure is close to complete once nonsynchronous
+clocks are allowed. Evidence of a discrete pandemic change is not robust. This
+is associational evidence for one ETF pair, not a causal estimate or trading recommendation.
 
-最稳健的结论是：相对 EWJ，HEWJ 在疫情前后都没有实现一比一的完整日度日元对冲。
-疫情后斜率更接近 -1，但“疫情导致或清晰标记斜率改变”的证据无法通过全部已声明的
-影响点与日期敏感性检验。本研究只描述一组 ETF 的条件相关，不是因果估计或交易建议。
+同日模型斜率绝对值小于 1，但 Dimson 与周度时钟修正后的疫情后累计暴露与 -1 相容。
+因此最终结论必须收窄为：同日暴露看似不完整，但允许非同步观测后，累计暴露接近完整；
+疫情离散变化并不稳健。本研究只描述一组 ETF 的条件相关，不是因果估计或交易建议。

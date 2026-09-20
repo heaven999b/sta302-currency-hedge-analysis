@@ -16,37 +16,42 @@ Private, reproducible course project studying whether the daily return spread be
 | Interaction p, classical / 经典 p 值 | 0.00931 |
 | Interaction p, HAC(5) / HAC(5) p 值 | 0.10439 |
 | Implied post-period slope / 疫情后隐含斜率 | -0.912143 |
+| Dimson cumulative post exposure / Dimson 疫情后累计暴露 | -0.994105; HAC(22) CI [-1.03465, -0.95356] |
+| Weekly common-date post exposure / 周度共同日期疫情后暴露 | -0.986328; CI [-1.01568, -0.95697] |
 | Selected predictive model / 最终预测模型 | FX interaction / 汇率交互模型 |
 | Rolling-origin mean RMSE / 滚动验证平均 RMSE | 0.26665 |
 | Held-out test RMSE / 留出测试 RMSE | 0.3159 vs 0.6532 mean benchmark |
 | Quadratic terms, HAC(5) joint p / 二次项联合 p 值 | 0.02880 |
 | Yeo-Johnson lambda / Yeo-Johnson 参数 | 1.00 on development data |
 | Break-window interaction p / 断点窗口交互 p 值 | 0.03028–0.15997 |
+| Test response SD, log vs arithmetic / 测试波动标准差 | 0.65378 vs 0.65316 |
 
-The pandemic interaction is significant with conventional OLS standard errors but not with Newey-West HAC(5). Both period-specific slopes remain significantly different from the complete-hedge benchmark of -1 under HAC(5), supporting incomplete hedging in both periods. The break is associational, not causal.
+The pandemic interaction is significant with conventional OLS standard errors but not with Newey-West HAC(5). Same-date slopes differ from -1, but Dimson lead/current/lag and weekly common-date cumulative exposures are statistically compatible with -1. Therefore incomplete hedging applies to the same-date specification, not unconditionally to cumulative exposure. The break is associational, not causal.
 
-疫情交互项在经典 OLS 标准误下显著，但使用 Newey-West HAC(5) 后不显著。两个时期的斜率在 HAC(5) 下仍显著不同于完全对冲基准 -1，因此支持“两时期均存在不完全对冲”；断点只作相关性解释，不作因果解释。
+疫情交互项在经典 OLS 标准误下显著，但使用 Newey-West HAC(5) 后不显著。同日模型斜率显著不同于 -1，但 Dimson 前一期/当期/后一期累计暴露和周度共同日期暴露与 -1 相容。因此“不完全对冲”只适用于同日设定，不能无条件推广到累计暴露；断点只作相关性解释。
 
 The nonlinear, influence, and break-date analyses are now complete. The
 interaction remains negative, but its 5% significance changes under
 winsorization, Cook's-distance deletion, and alternative declared break dates.
-The robust conclusion is incomplete hedging in both periods; a discrete pandemic
-change is not stable across reasonable specifications.
+The same-date model indicates incomplete exposure, while clock-corrected cumulative
+exposure is close to -1; a discrete pandemic change is not stable across reasonable specifications.
 
-非线性、影响点与断点日期分析均已完成。交互项方向始终为负，但其 5% 显著性会随
-缩尾、Cook 距离删除和备选断点改变。稳健结论是两个时期都存在不完全对冲，不能稳健
-声称疫情造成了离散结构变化。
+非线性、影响点、断点日期与市场时钟分析均已完成。同日模型显示不完全暴露，但时钟
+修正后的累计暴露接近 -1；交互项显著性会随合理设定改变，不能稳健声称疫情造成了
+离散结构变化。
 
 ## Strict workflow / 严格实验流程
 
 1. Each price series is converted to a log return on its own native calendar before merging.
-2. The primary sample keeps only rows sharing the same return start and end dates across HEWJ/EWJ, USD/JPY, Nikkei 225, and VIX; a same-end-date-only sample is reported separately as sensitivity analysis.
+2. The primary sample keeps rows sharing the same calendar return start and end dates. A separate audit records each source's native time zone and observation clock; it does not pretend that New York noon, U.S. close, and Tokyo close are the same instant.
 3. The full inferential model is fitted first with `JPY_app * Post`, Nikkei return, SMB, HML, RMW, CMA, MOM, VIX change, and the lagged rate differential. Because residuals are not iid, primary inference uses Newey-West HAC(5), with HAC(1) and HAC(10) sensitivity checks.
-4. Prediction is secondary and uses expanding-window rolling-origin validation. Models trained through 2020, 2021, and 2022 are validated on 2021, 2022, and 2023. Mean validation RMSE selects the FX-interaction model; it is refit on all development data through 2024-01-23 and evaluated once on the untouched final test.
+4. Prediction is secondary and uses expanding-window rolling-origin validation. Models trained through 2020, 2021, and 2022 are validated on 2021, 2022, and 2023. Mean validation RMSE selects the FX-interaction model; it is refit through 2024-01-23 and evaluated on data held out from fitting and selection.
 5. A quadratic yen model and a Yeo-Johnson response use the same folds; Yeo-Johnson lambda selection occurs inside each fold, and neither analysis reopens the final test choice.
 6. The primary model keeps all valid observations. Winsorization and Cook's-distance deletion are labelled sensitivity/stress tests, not replacements chosen by significance.
 7. March 6, March 11, and March 16, 2020 are evaluated as a declared break window without selecting the lowest p-value.
 8. No random shuffling, test-set tuning, or stochastic training is used. OLS is deterministic, so repeated random seeds are not applicable.
+9. Market-clock risk is tested with Dimson lag/current/lead cumulative exposure, HAC(5)/HAC(22), and a last-common-date weekly model. FX leads are diagnostic only and never enter prediction.
+10. The complete workflow is rerun with exact arithmetic returns; this directly tests whether log returns suppress test volatility.
 
 The held-out exercise measures conditional fit using same-day observed predictors; it is not an ahead-of-time trading forecast.
 
@@ -100,6 +105,8 @@ while preserving a directly comparable presentation.
 
 ![Influence diagnostics](figures/diagnostics/influence_diagnostics.png)
 
+![Time and return-definition sensitivity](figures/diagnostics/time_and_return_definition_sensitivity.png)
+
 ## Repository architecture / 仓库架构
 
 ```text
@@ -114,6 +121,7 @@ while preserving a directly comparable presentation.
 │   ├── raw/                            # frozen source snapshots + SHA-256
 │   ├── original_csv/                   # deterministic CSV exports of all sources
 │   ├── DATA_DICTIONARY.csv             # processed-field definitions
+│   ├── TIME_ALIGNMENT.csv/.md           # time zones, market clocks, interval policy
 │   ├── SOURCE_MANIFEST.csv             # machine-readable source provenance
 │   └── processed/                      # cleaned modeling table
 ├── results/                            # machine-readable experiment results
@@ -165,7 +173,7 @@ This command:
 
 1. verifies all seven frozen raw-file SHA-256 hashes;
 2. exports every original source as CSV with source and export hashes;
-3. reruns interval-aligned cleaning, OLS, HAC inference, diagnostics, nonlinear, influence, break-date, figure, and chronological validation in R;
+3. reruns interval/clock-audited cleaning, OLS, HAC inference, Dimson and weekly clock checks, exact arithmetic-return comparison, diagnostics, nonlinear, influence, break-date, figure, and chronological validation in R;
 4. executes end-to-end tests for leakage controls, split order, model-selection lock, sensitivity conclusions, and artifacts;
 5. knits the Rmd to a self-contained bilingual HTML report;
 6. rebuilds the official English, Chinese, and bilingual proposal PDFs;
@@ -187,9 +195,9 @@ This command:
 - `submission/` - staged PDF, standalone Rmd, original CSV exports/copies, cleaned CSV, checklist, and hashes.
 - `results/audit/R_run_log.txt` - R version, package versions, sample and results.
 - `reports/analysis/RESULTS_AND_CONCLUSIONS.md` - bilingual methods, tests, limitations, and conclusions.
-- `results/prediction/` - rolling validation, locked selection, untouched-test metrics and predictions.
+- `results/prediction/` - rolling validation, locked selection, held-out-from-selection metrics and predictions.
 - `results/inference/` - classical and HAC coefficients, hypothesis tests and model diagnostics.
-- `results/robustness/` - alignment, functional-form, HAC-lag, influence and break-date sensitivity.
+- `results/robustness/` - calendar/clock alignment, return-definition, functional-form, HAC-lag, influence and break-date sensitivity.
 - `results/audit/` - row-level audits, run log, data-quality checks and artifact hashes.
 - `results/models/models.rds` - fitted models and locked selection metadata.
 
