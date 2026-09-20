@@ -9,3 +9,4 @@
 *.png binary
 *.pdf binary
 *.rds binary
+data/raw/* binary
