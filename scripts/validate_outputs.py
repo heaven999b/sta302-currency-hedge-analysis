@@ -144,21 +144,25 @@ def validate_artifacts() -> None:
         text = subprocess.check_output(["pdftotext", str(official_pdf), "-"], text=True)
         for phrase in [
             "Official English proposal",
-            "Introduction (388 words)",
-            "Table 1. Numerical summary",
-            "Table 2. Complete preliminary OLS coefficient table",
+            "Abstract",
+            "Introduction (400 words)",
+            "Related work and research gap",
+            "Table 1. Summary and missingness",
+            "Table 2. Preliminary OLS estimates",
             "Table 3. Proposed team schedule",
+            "Glen, J., & Jorion, P. (1993)",
+            "Six-panel diagnostics",
             "diagnose but do not correct violations",
         ]:
             require(phrase in text, f"Expected official PDF text not found: {phrase}")
         require("第二部分" not in text, "Official English PDF unexpectedly contains the Chinese section")
 
         bilingual_text = subprocess.check_output(["pdftotext", str(bilingual_pdf), "-"], text=True)
-        for phrase in ["Official English proposal", "第二部分", "研究背景与问题", "提交前仍需确认"]:
+        for phrase in ["Official English proposal", "第二部分", "摘要", "研究背景与问题", "数据与产品文档", "提交前仍需确认"]:
             require(phrase in bilingual_text, f"Expected bilingual PDF text not found: {phrase}")
 
         chinese_text = subprocess.check_output(["pdftotext", str(chinese_pdf), "-"], text=True)
-        for phrase in ["完整中文提案", "研究背景与问题", "残差诊断", "提交前仍需确认"]:
+        for phrase in ["完整中文提案", "摘要", "研究背景与问题", "数据与产品文档", "残差诊断", "提交前仍需确认"]:
             require(phrase in chinese_text, f"Expected Chinese PDF text not found: {phrase}")
 
     manifest_rows = read_rows(ROOT / "results" / "ARTIFACT_MANIFEST.csv")

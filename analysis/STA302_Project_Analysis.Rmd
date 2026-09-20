@@ -697,7 +697,7 @@ predictor_summary <- do.call(rbind, lapply(numeric_predictors, function(v) {
   x <- analysis_data[[v]]
   data.frame(variable = v, mean = mean(x), sd = sd(x), min = min(x),
              q25 = unname(quantile(x, .25)), median = median(x),
-             q75 = unname(quantile(x, .75)), max = max(x))
+             q75 = unname(quantile(x, .75)), max = max(x), missing = sum(is.na(x)))
 }))
 
 write.csv(analysis_data, file.path(processed_dir, "sta302_daily_analysis.csv"), row.names = FALSE)
@@ -782,17 +782,26 @@ abline(h = 0, lty = 2, col = "grey45")
 axis(1, at = hac_sensitivity$lag)
 dev.off()
 
-png(file.path(figures_dir, "residual_diagnostics.png"), width = 1800, height = 1600, res = 180)
-par(mfrow = c(2, 2), mar = c(4.2, 4.2, 2.5, 1.2))
+png(file.path(figures_dir, "residual_diagnostics.png"), width = 1800, height = 2100, res = 180)
+par(mfrow = c(3, 2), mar = c(4.2, 4.2, 2.5, 1.2))
 plot(fitted(full_model), resid, pch = 16, cex = .45, col = rgb(0.1, 0.3, 0.6, .3),
      xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs fitted")
 abline(h = 0, lty = 2, col = "grey40")
+standardized_resid <- rstandard(full_model)
+scale_location <- sqrt(abs(standardized_resid))
+plot(fitted(full_model), scale_location, pch = 16, cex = .45,
+     col = rgb(0.1, 0.3, 0.6, .3), xlab = "Fitted values",
+     ylab = expression(sqrt("|Standardized residual|")), main = "Scale-location")
+lines(lowess(fitted(full_model), scale_location), col = "#d94b36", lwd = 2)
 qqnorm(resid, pch = 16, cex = .42, col = rgb(0.1, 0.3, 0.6, .35), main = "Normal Q-Q")
 qqline(resid, col = "#d94b36", lwd = 2)
 plot(analysis_data$date, resid, type = "l", col = "#1f6aa5", xlab = "Date", ylab = "Residual",
      main = "Residuals over time")
 abline(h = 0, lty = 2, col = "grey40")
 acf(resid, lag.max = 30, main = "Residual autocorrelation")
+plot(analysis_data$date, cooks, type = "h", col = adjustcolor("#1f6aa5", alpha.f = .7),
+     xlab = "Date", ylab = "Cook's distance", main = "Influence screening")
+abline(h = cooks_threshold, lty = 2, col = "#d94b36", lwd = 2)
 dev.off()
 
 png(file.path(figures_dir, "coefficient_intervals_hac5.png"), width = 1800, height = 1200, res = 180)

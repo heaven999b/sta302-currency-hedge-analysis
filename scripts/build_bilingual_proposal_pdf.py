@@ -58,7 +58,7 @@ def register_fonts() -> None:
 def clean_inline(text: str) -> str:
     text = text.strip().removeprefix("> ")
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1 (\2)", text)
-    text = text.replace("**", "").replace("*", "").replace("`", "")
+    text = text.replace("`", "")
     text = text.replace("\\(", "").replace("\\)", "")
     text = text.replace("\\[", "").replace("\\]", "")
     text = text.replace("—", "-").replace("–", "-").replace("‑", "-")
@@ -73,7 +73,10 @@ def clean_inline(text: str) -> str:
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
-    return html.escape(text)
+    text = html.escape(text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", text)
+    return text
 
 
 def parse_sections(markdown: str) -> dict[str, list[str]]:
@@ -215,11 +218,22 @@ def build_chinese_figures() -> None:
         fitted.append(pred)
         residuals.append(float(row["Y"]) - pred)
 
-    image = PILImage.new("RGB", (1800, 1320), "white")
+    influence_by_date = {
+        row["date"]: row for row in read_csv(ROOT / "results" / "influence_audit.csv")
+    }
+    standardized = [float(influence_by_date[row["date"]]["standardized_residual"]) for row in rows]
+    cooks = [float(influence_by_date[row["date"]]["cooks_distance"]) for row in rows]
+    cooks_threshold = float(next(iter(influence_by_date.values()))["threshold_4_over_n"])
+
+    image = PILImage.new("RGB", (1800, 1940), "white")
     draw = ImageDraw.Draw(image)
     panel_title = _pil_font(30)
     panel_label = _pil_font(21)
-    panels = [(140, 115, 850, 595), (990, 115, 1700, 595), (140, 770, 850, 1250), (990, 770, 1700, 1250)]
+    panels = [
+        (140, 115, 850, 570), (990, 115, 1700, 570),
+        (140, 745, 850, 1200), (990, 745, 1700, 1200),
+        (140, 1375, 850, 1830), (990, 1375, 1700, 1830),
+    ]
 
     # Residuals versus fitted.
     xr = (min(fitted), max(fitted)); yr = (min(residuals), max(residuals))
@@ -231,15 +245,25 @@ def build_chinese_figures() -> None:
     zero_y = _scale(0, *yr, b, t)
     draw.line((l, zero_y, r, zero_y), fill="#D95F59", width=3)
 
+    # Scale-location plot.
+    scale_location = [math.sqrt(abs(value)) for value in standardized]
+    sl_range = (0.0, max(scale_location) * 1.05)
+    _draw_axes(draw, panels[1], xr, sl_range, "拟合值", "标准化残差绝对值平方根",
+               "尺度-位置图", panel_title, panel_label)
+    l, t, r, b = panels[1]
+    for x, y in zip(fitted, scale_location):
+        px, py = _scale(x, *xr, l, r), _scale(y, *sl_range, b, t)
+        draw.ellipse((px - 2, py - 2, px + 2, py + 2), fill="#397DAF")
+
     # Normal Q-Q plot.
-    observed = sorted(residuals)
+    observed = sorted(standardized)
     n = len(observed)
     mean = sum(observed) / n
     sd = math.sqrt(sum((x - mean) ** 2 for x in observed) / (n - 1))
     theoretical = [NormalDist().inv_cdf((i + .5) / n) for i in range(n)]
     q_range = (theoretical[0], theoretical[-1]); o_range = (observed[0], observed[-1])
-    _draw_axes(draw, panels[1], q_range, o_range, "正态理论分位数", "标准化残差", "正态 Q-Q 图", panel_title, panel_label)
-    l, t, r, b = panels[1]
+    _draw_axes(draw, panels[2], q_range, o_range, "正态理论分位数", "标准化残差", "正态 Q-Q 图", panel_title, panel_label)
+    l, t, r, b = panels[2]
     for x, y in zip(theoretical, observed):
         px, py = _scale(x, *q_range, l, r), _scale(y, *o_range, b, t)
         draw.ellipse((px - 2, py - 2, px + 2, py + 2), fill="#397DAF")
@@ -248,8 +272,8 @@ def build_chinese_figures() -> None:
 
     # Residuals in time order.
     time_range = (1.0, float(n))
-    _draw_axes(draw, panels[2], time_range, yr, "观测顺序", "残差", "残差的时间顺序", panel_title, panel_label)
-    l, t, r, b = panels[2]
+    _draw_axes(draw, panels[3], time_range, yr, "观测顺序", "残差", "残差的时间顺序", panel_title, panel_label)
+    l, t, r, b = panels[3]
     points = [(_scale(i + 1, *time_range, l, r), _scale(y, *yr, b, t)) for i, y in enumerate(residuals)]
     draw.line(points, fill="#397DAF", width=2)
     zero_y = _scale(0, *yr, b, t)
@@ -262,8 +286,8 @@ def build_chinese_figures() -> None:
            for lag in range(1, max_lag + 1)]
     acf_limit = max(.20, max(abs(x) for x in acf) * 1.2)
     acf_range = (-acf_limit, acf_limit)
-    _draw_axes(draw, panels[3], (1, max_lag), acf_range, "滞后阶数", "自相关系数", "残差自相关", panel_title, panel_label)
-    l, t, r, b = panels[3]
+    _draw_axes(draw, panels[4], (1, max_lag), acf_range, "滞后阶数", "自相关系数", "残差自相关", panel_title, panel_label)
+    l, t, r, b = panels[4]
     zero_y = _scale(0, *acf_range, b, t)
     conf = 1.96 / math.sqrt(n)
     for bound in (-conf, conf):
@@ -273,6 +297,17 @@ def build_chinese_figures() -> None:
         px = _scale(lag, 1, max_lag, l, r)
         py = _scale(value, *acf_range, b, t)
         draw.line((px, zero_y, px, py), fill="#397DAF", width=6)
+
+    # Cook's distance in time order.
+    cook_range = (0.0, max(cooks) * 1.08)
+    _draw_axes(draw, panels[5], time_range, cook_range, "观测顺序", "Cook 距离", "影响点筛查", panel_title, panel_label)
+    l, t, r, b = panels[5]
+    threshold_y = _scale(cooks_threshold, *cook_range, b, t)
+    draw.line((l, threshold_y, r, threshold_y), fill="#D95F59", width=3)
+    for i, value in enumerate(cooks, 1):
+        px = _scale(i, *time_range, l, r)
+        py = _scale(value, *cook_range, b, t)
+        draw.line((px, b, px, py), fill="#397DAF", width=2)
     image.save(DIAGNOSTICS_ZH, optimize=True)
 
 
@@ -433,9 +468,9 @@ def variable_summary_table(styles, chinese=False):
             "dlog_VIX": ("VIX 对数变化", "离散最大且右侧极端"),
             "rate_diff": ("滞后利差", "按月更新、变化缓慢"),
         }
-    header = ["Variable", "Type", "Mean", "SD", "Range", "Important feature"]
+    header = ["Variable", "Type", "Mean", "SD", "Range", "Missing", "Important feature"]
     if chinese:
-        header = ["变量", "类型", "均值", "标准差", "范围", "主要特征"]
+        header = ["变量", "类型", "均值", "标准差", "范围", "缺失", "主要特征"]
     rows = [header]
     for name in ["Y", "JPY_app", "Nikkei_ret", "SMB", "HML", "RMW", "CMA", "MOM", "dlog_VIX", "rate_diff"]:
         row = summary[name]
@@ -446,6 +481,7 @@ def variable_summary_table(styles, chinese=False):
             f"{float(row['mean']):.3f}",
             f"{float(row['sd']):.3f}",
             f"{float(row['min']):.3f} to {float(row['max']):.3f}",
+            str(int(float(row.get("missing", 0)))),
             feature,
         ])
     rows.append([
@@ -454,10 +490,11 @@ def variable_summary_table(styles, chinese=False):
         f"Pre: {int(diagnostics['pre_observations']):,}" if not chinese else f"疫情前：{int(diagnostics['pre_observations']):,}",
         f"Post: {int(diagnostics['post_observations']):,}" if not chinese else f"疫情后：{int(diagnostics['post_observations']):,}",
         "2 levels" if not chinese else "2 个水平",
+        "0",
         "WHO-defined break" if not chinese else "WHO 事件定义断点",
     ])
-    return wrap_table(rows, [.92 * inch, .62 * inch, .68 * inch, .64 * inch, 1.05 * inch, 2.49 * inch],
-                      styles, font_size=6.45, chinese=chinese)
+    return wrap_table(rows, [.80 * inch, .54 * inch, .60 * inch, .58 * inch, .96 * inch, .52 * inch, 2.40 * inch],
+                      styles, font_size=6.1, chinese=chinese)
 
 
 def coefficient_table(styles, chinese=False):
@@ -569,17 +606,19 @@ def english_content(sections, styles, official_heading=True):
     if official_heading:
         story.append(Paragraph("Official English proposal", styles["h1"]))
     story.extend([
+        Paragraph("Abstract", styles["h1"]),
+        *paragraph_blocks(sections["Abstract"], styles["body"], styles["bullet"], styles["equation"]),
         Paragraph("Contribution statement", styles["h1"]),
         contribution_table(styles),
         Spacer(1, 4),
         Paragraph("Names and responsibilities must match the separately submitted Group Teamwork Agreement.", styles["small"]),
     ])
     order = [
-        "Introduction (388 words)",
-        "Data description (276 words)",
-        "Ethics discussion (189 words)",
-        "Preliminary results (351 words)",
-        "Plan for the remaining analysis (275 words)",
+        "Introduction (400 words)",
+        "Data description (289 words)",
+        "Ethics discussion (198 words)",
+        "Preliminary results (391 words including captions)",
+        "Plan for the remaining analysis (285 words)",
         "References",
         "Data and product documentation",
         "Submission items requiring group confirmation",
@@ -589,14 +628,14 @@ def english_content(sections, styles, official_heading=True):
         if section.startswith("Data description"):
             story.extend([
                 variable_summary_table(styles),
-                Paragraph("Table 1. Numerical summary of the response and every model predictor. Units are percentage points except the categorical period indicator.", styles["caption"]),
+                Paragraph("Table 1. Summary and missingness for all preliminary-model variables.", styles["caption"]),
             ])
         if section.startswith("Preliminary results"):
             story.extend([
                 Image(str(SCATTER), width=6.38 * inch, height=4.25 * inch),
-                Paragraph("Figure 1. Daily HEWJ-minus-EWJ return spread versus yen appreciation, with controlled period-specific OLS slopes.", styles["caption"]),
+                Paragraph("Figure 1. Daily return spread versus yen appreciation with period-specific controlled OLS slopes.", styles["caption"]),
                 coefficient_table(styles),
-                Paragraph("Table 2. Complete preliminary OLS coefficient table with classical standard errors and 95% confidence intervals.", styles["caption"]),
+                Paragraph("Table 2. Preliminary OLS estimates with classical standard errors and 95% confidence intervals.", styles["caption"]),
             ])
         story.extend(paragraph_blocks(sections[section], styles["body"], styles["bullet"], styles["equation"]))
         if section.startswith("Plan for"):
@@ -607,8 +646,8 @@ def english_content(sections, styles, official_heading=True):
     story.extend([
         PageBreak(),
         Paragraph("Residual diagnostics", styles["h2"]),
-        Image(str(DIAGNOSTICS), width=6.38 * inch, height=5.67 * inch),
-        Paragraph("Figure 2. Residual-versus-fitted, Q-Q, time-order, and autocorrelation plots for the uncorrected preliminary OLS model.", styles["caption"]),
+        Image(str(DIAGNOSTICS), width=6.38 * inch, height=7.44 * inch),
+        Paragraph("Figure 2. Six-panel diagnostics for the uncorrected preliminary OLS model.", styles["caption"]),
     ])
     return story
 
@@ -621,18 +660,20 @@ def chinese_content(sections, styles, start_new_page=True, standalone=False, inc
         Paragraph("完整中文提案" if standalone else "第二部分 - 中文提案（组内讨论与理解版本）", styles["h1_zh"]),
         Paragraph("本版本完整保留研究设计、数据、数值结果、诊断、限制与参考文献。" if standalone else
                   "正式课程提交请使用独立英文 PDF；本部分与英文版采用相同研究设计、数值与限制。", styles["body_zh"]),
+        Paragraph("摘要", styles["h1_zh"]),
+        *paragraph_blocks(sections["摘要"], styles["body_zh"], styles["bullet_zh"], styles["equation_zh"], paragraph_space=3),
         Paragraph("成员贡献说明", styles["h1_zh"]),
         contribution_table(styles, chinese=True),
         Spacer(1, 4),
         Paragraph("姓名与职责必须和单独提交的小组协议一致。", styles["small_zh"]),
     ])
-    order = ["研究背景与问题", "数据说明", "伦理声明", "初步结果", "后续分析计划", "参考文献", "提交前仍需确认"]
+    order = ["研究背景与问题", "数据说明", "伦理声明", "初步结果", "后续分析计划", "参考文献", "数据与产品文档", "提交前仍需确认"]
     for section in order:
         story.append(Paragraph(section, styles["h1_zh"]))
         if section == "数据说明":
             story.extend([
                 variable_summary_table(styles, chinese=True),
-                Paragraph("表 1：响应变量及全部入模预测变量的数值汇总。", styles["caption_zh"]),
+                Paragraph("表 1：全部初步模型变量的数值汇总与缺失数量。", styles["caption_zh"]),
             ])
         if section == "初步结果":
             if include_figures:
@@ -655,8 +696,8 @@ def chinese_content(sections, styles, start_new_page=True, standalone=False, inc
         story.extend([
             PageBreak(),
             Paragraph("残差诊断", styles["h1_zh"]),
-            Image(str(DIAGNOSTICS_ZH), width=6.25 * inch, height=4.58 * inch),
-            Paragraph("图 2：未修正初步 OLS 模型的残差-拟合值、Q-Q、时间顺序与自相关图。", styles["caption_zh"]),
+            Image(str(DIAGNOSTICS_ZH), width=6.25 * inch, height=6.60 * inch),
+            Paragraph("图 2：未修正初步 OLS 模型的六面板函数形式、方差、正态性、依赖与影响诊断。", styles["caption_zh"]),
         ])
     return story
 
