@@ -31,6 +31,7 @@ EN_SOURCE = ROOT / "docs" / "proposal" / "STA302_Research_Proposal_EN.md"
 ZH_SOURCE = ROOT / "docs" / "proposal" / "STA302_Research_Proposal_ZH.md"
 OUTPUT_EN = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf"
 OUTPUT_BILINGUAL = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
+OUTPUT_ZH = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf"
 SCATTER = ROOT / "figures" / "fx_slope_by_period.png"
 DIAGNOSTICS = ROOT / "figures" / "residual_diagnostics.png"
 
@@ -78,7 +79,7 @@ def parse_sections(markdown: str) -> dict[str, list[str]]:
     return sections
 
 
-def paragraph_blocks(lines: list[str], body_style, bullet_style, equation_style):
+def paragraph_blocks(lines: list[str], body_style, bullet_style, equation_style, paragraph_space=6):
     blocks = []
     buffer: list[str] = []
     equation: list[str] = []
@@ -86,7 +87,7 @@ def paragraph_blocks(lines: list[str], body_style, bullet_style, equation_style)
 
     def flush() -> None:
         if buffer:
-            blocks.extend([Paragraph(clean_inline(" ".join(buffer)), body_style), Spacer(1, 6)])
+            blocks.extend([Paragraph(clean_inline(" ".join(buffer)), body_style), Spacer(1, paragraph_space)])
             buffer.clear()
 
     for raw in lines:
@@ -163,18 +164,18 @@ def make_styles():
                                       fontSize=12, leading=17, textColor=BLUE, alignment=TA_LEFT, spaceAfter=14),
         "h1": ParagraphStyle("H1", parent=base["Heading1"], fontName="Helvetica-Bold", fontSize=14,
                              leading=18, textColor=NAVY, spaceBefore=10, spaceAfter=7, keepWithNext=True),
-        "h1_zh": ParagraphStyle("H1ZH", parent=base["Heading1"], fontName="STSong-Light", fontSize=13.5,
-                                leading=18, textColor=NAVY, spaceBefore=10, spaceAfter=7, keepWithNext=True),
+        "h1_zh": ParagraphStyle("H1ZH", parent=base["Heading1"], fontName="STSong-Light", fontSize=13.2,
+                                leading=17, textColor=NAVY, spaceBefore=8, spaceAfter=5, keepWithNext=True),
         "h2": ParagraphStyle("H2", parent=base["Heading2"], fontName="Helvetica-Bold", fontSize=11,
                              leading=14, textColor=BLUE, spaceBefore=8, spaceAfter=6, keepWithNext=True),
         "body": ParagraphStyle("Body", parent=base["BodyText"], fontName="Helvetica", fontSize=8.75,
                                leading=12.0, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
-        "body_zh": ParagraphStyle("BodyZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.8,
-                                  leading=14.0, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
+        "body_zh": ParagraphStyle("BodyZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.5,
+                                  leading=12.4, textColor=colors.HexColor("#1D252C"), alignment=TA_LEFT),
         "bullet": ParagraphStyle("Bullet", parent=base["BodyText"], fontName="Helvetica", fontSize=8.75,
                                  leading=12.0, leftIndent=16, firstLineIndent=-12, bulletIndent=0),
-        "bullet_zh": ParagraphStyle("BulletZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.8,
-                                    leading=14.0, leftIndent=18, firstLineIndent=-14, bulletIndent=0),
+        "bullet_zh": ParagraphStyle("BulletZH", parent=base["BodyText"], fontName="STSong-Light", fontSize=8.5,
+                                    leading=12.4, leftIndent=18, firstLineIndent=-14, bulletIndent=0),
         "caption": ParagraphStyle("Caption", parent=base["BodyText"], fontName="Helvetica-Oblique",
                                   fontSize=7.6, leading=9.4, textColor=MID, spaceBefore=3, spaceAfter=8),
         "caption_zh": ParagraphStyle("CaptionZH", parent=base["BodyText"], fontName="STSong-Light",
@@ -352,14 +353,20 @@ def schedule_table(styles, chinese=False):
     return wrap_table(rows, [1.0 * inch, 2.15 * inch, 1.45 * inch, 1.8 * inch], styles, font_size=6.8, chinese=chinese)
 
 
-def cover(styles, bilingual=False):
+def cover(styles, bilingual=False, chinese_only=False):
     diagnostics = {row["metric"]: row["value"] for row in read_csv(ROOT / "results" / "diagnostics.csv")}
     data_line = (f"{int(diagnostics['observations']):,} daily observations | "
                  f"{diagnostics['start_date']} to {diagnostics['end_date']}")
-    story = [Spacer(1, .18 * inch), Paragraph("Does a Currency Hedge Neutralize Daily Yen Exposure?", styles["title"])]
+    if chinese_only:
+        story = [Spacer(1, .18 * inch), Paragraph("货币对冲能否抵消日元的日度风险敞口？", styles["title_zh"])]
+    else:
+        story = [Spacer(1, .18 * inch), Paragraph("Does a Currency Hedge Neutralize Daily Yen Exposure?", styles["title"])]
     if bilingual:
         story.append(Paragraph("货币对冲能否抵消日元的日度风险敞口？", styles["title_zh"]))
-    story.append(Paragraph("A Multi-Factor Study of HEWJ versus EWJ Before and After the COVID-19 Break", styles["subtitle"]))
+    if chinese_only:
+        story.append(Paragraph("疫情前后 HEWJ 与 EWJ 的多因子比较研究", styles["subtitle_zh"]))
+    else:
+        story.append(Paragraph("A Multi-Factor Study of HEWJ versus EWJ Before and After the COVID-19 Break", styles["subtitle"]))
     if bilingual:
         story.append(Paragraph("疫情前后 HEWJ 与 EWJ 的多因子比较研究", styles["subtitle_zh"]))
     story.extend([HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=18)])
@@ -376,11 +383,21 @@ def cover(styles, bilingual=False):
             ["Group / 小组", "Haiwen Yi; [add all other members / 补充其他成员]"],
             ["Data / 数据", data_line],
         ]
+    elif chinese_only:
+        meta = [
+            ["课程", "STA302 期末项目第一部分"],
+            ["日期", "2026 年 9 月 21 日"],
+            ["小组", "Haiwen Yi；[提交前补充所有其他成员]"],
+            ["数据", data_line.replace("daily observations", "个日度观测").replace(" to ", " 至 ")],
+        ]
     story.extend([
         wrap_table(meta, [1.25 * inch, 5.15 * inch], styles, font_size=8.2, repeat_rows=0, chinese=bilingual),
         Spacer(1, 24),
-        Paragraph("Official English course version" if not bilingual else "English proposal followed by a Chinese study copy / 英文正式提案及中文组内版本",
-                  styles["subtitle_zh" if bilingual else "subtitle"]),
+        Paragraph(
+            "完整中文版" if chinese_only else
+            ("English proposal followed by a Chinese study copy / 英文正式提案及中文组内版本" if bilingual else "Official English course version"),
+            styles["subtitle_zh" if (bilingual or chinese_only) else "subtitle"]
+        ),
         PageBreak(),
     ])
     return story
@@ -421,31 +438,33 @@ def english_content(sections, styles, official_heading=True):
                 Paragraph("Table 2. Complete preliminary OLS coefficient table with classical standard errors and 95% confidence intervals.", styles["caption"]),
             ])
         story.extend(paragraph_blocks(sections[section], styles["body"], styles["bullet"], styles["equation"]))
-        if section.startswith("Preliminary results"):
-            story.extend([
-                PageBreak(),
-                Paragraph("Residual diagnostics", styles["h2"]),
-                Image(str(DIAGNOSTICS), width=6.38 * inch, height=5.67 * inch),
-                Paragraph("Figure 2. Residual-versus-fitted, Q-Q, time-order, and autocorrelation plots for the uncorrected preliminary OLS model.", styles["caption"]),
-            ])
         if section.startswith("Plan for"):
             story.extend([
                 schedule_table(styles),
                 Paragraph("Table 3. Proposed team schedule. Member placeholders must be replaced with the signed roster.", styles["caption"]),
             ])
+    story.extend([
+        PageBreak(),
+        Paragraph("Residual diagnostics", styles["h2"]),
+        Image(str(DIAGNOSTICS), width=6.38 * inch, height=5.67 * inch),
+        Paragraph("Figure 2. Residual-versus-fitted, Q-Q, time-order, and autocorrelation plots for the uncorrected preliminary OLS model.", styles["caption"]),
+    ])
     return story
 
 
-def chinese_content(sections, styles):
-    story = [
-        PageBreak(),
-        Paragraph("第二部分 - 中文提案（组内讨论与理解版本）", styles["h1_zh"]),
-        Paragraph("正式课程提交请使用独立英文 PDF；本部分与英文版采用相同研究设计、数值与限制。", styles["body_zh"]),
+def chinese_content(sections, styles, start_new_page=True, standalone=False, include_figures=False):
+    story = []
+    if start_new_page:
+        story.append(PageBreak())
+    story.extend([
+        Paragraph("完整中文提案" if standalone else "第二部分 - 中文提案（组内讨论与理解版本）", styles["h1_zh"]),
+        Paragraph("本版本完整保留研究设计、数据、数值结果、诊断、限制与参考文献。" if standalone else
+                  "正式课程提交请使用独立英文 PDF；本部分与英文版采用相同研究设计、数值与限制。", styles["body_zh"]),
         Paragraph("成员贡献说明", styles["h1_zh"]),
         contribution_table(styles, chinese=True),
         Spacer(1, 4),
         Paragraph("姓名与职责必须和单独提交的小组协议一致。", styles["small_zh"]),
-    ]
+    ])
     order = ["研究背景与问题", "数据说明", "伦理声明", "初步结果", "后续分析计划", "参考文献", "提交前仍需确认"]
     for section in order:
         story.append(Paragraph(section, styles["h1_zh"]))
@@ -455,16 +474,29 @@ def chinese_content(sections, styles):
                 Paragraph("表 1：响应变量及全部入模预测变量的数值汇总。", styles["caption_zh"]),
             ])
         if section == "初步结果":
+            if include_figures:
+                story.extend([
+                    Image(str(SCATTER), width=6.25 * inch, height=4.16 * inch),
+                    Paragraph("图 1：日元升值与 HEWJ-EWJ 日度收益差，以及分时期 OLS 斜率。", styles["caption_zh"]),
+                ])
             story.extend([
                 coefficient_table(styles, chinese=True),
                 Paragraph("表 2：完整初步 OLS 系数、经典标准误与 95% 置信区间。", styles["caption_zh"]),
             ])
-        story.extend(paragraph_blocks(sections[section], styles["body_zh"], styles["bullet_zh"], styles["equation_zh"]))
+        story.extend(paragraph_blocks(sections[section], styles["body_zh"], styles["bullet_zh"],
+                                      styles["equation_zh"], paragraph_space=3))
         if section == "后续分析计划":
             story.extend([
                 schedule_table(styles, chinese=True),
                 Paragraph("表 3：拟定团队进度。提交前必须替换成员占位符。", styles["caption_zh"]),
             ])
+    if include_figures:
+        story.extend([
+            PageBreak(),
+            Paragraph("残差诊断", styles["h1_zh"]),
+            Image(str(DIAGNOSTICS), width=6.25 * inch, height=5.55 * inch),
+            Paragraph("图 2：未修正初步 OLS 模型的残差-拟合值、Q-Q、时间顺序与自相关图。", styles["caption_zh"]),
+        ])
     return story
 
 
@@ -481,8 +513,14 @@ def build() -> None:
     bilingual_story = cover(styles, bilingual=True) + english_content(en_sections, styles) + chinese_content(zh_sections, styles)
     ProposalDoc(str(OUTPUT_BILINGUAL), "STA302 Bilingual Research Proposal").build(bilingual_story)
 
+    chinese_story = cover(styles, chinese_only=True) + chinese_content(
+        zh_sections, styles, start_new_page=False, standalone=True, include_figures=True
+    )
+    ProposalDoc(str(OUTPUT_ZH), "STA302 Research Proposal - Chinese Version").build(chinese_story)
+
     print(OUTPUT_EN)
     print(OUTPUT_BILINGUAL)
+    print(OUTPUT_ZH)
 
 
 if __name__ == "__main__":

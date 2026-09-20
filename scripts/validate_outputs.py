@@ -73,6 +73,7 @@ def validate_artifacts() -> None:
         ROOT / "output" / "STA302_Project_Analysis.html",
         ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf",
         ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf",
+        ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf",
         ROOT / "figures" / "fx_slope_by_period.png",
         ROOT / "figures" / "residual_diagnostics.png",
         ROOT / "figures" / "coefficient_intervals_hac5.png",
@@ -87,6 +88,7 @@ def validate_artifacts() -> None:
 
     official_pdf = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_EN.pdf"
     bilingual_pdf = ROOT / "output" / "pdf" / "STA302_Bilingual_Research_Proposal.pdf"
+    chinese_pdf = ROOT / "output" / "pdf" / "STA302_Research_Proposal_Official_ZH.pdf"
     if shutil.which("pdftotext"):
         text = subprocess.check_output(["pdftotext", str(official_pdf), "-"], text=True)
         for phrase in [
@@ -103,6 +105,10 @@ def validate_artifacts() -> None:
         bilingual_text = subprocess.check_output(["pdftotext", str(bilingual_pdf), "-"], text=True)
         for phrase in ["Official English proposal", "第二部分", "研究背景与问题", "提交前仍需确认"]:
             require(phrase in bilingual_text, f"Expected bilingual PDF text not found: {phrase}")
+
+        chinese_text = subprocess.check_output(["pdftotext", str(chinese_pdf), "-"], text=True)
+        for phrase in ["完整中文提案", "研究背景与问题", "残差诊断", "提交前仍需确认"]:
+            require(phrase in chinese_text, f"Expected Chinese PDF text not found: {phrase}")
 
 
 def validate_submission() -> None:
@@ -136,7 +142,7 @@ def main() -> None:
     validate_analysis()
     validate_artifacts()
     validate_submission()
-    print("VALIDATION PASSED: raw hashes, aligned analysis, strict splits, held-out results, figures, PDFs, standalone Rmd, and CSV package are consistent.")
+    print("VALIDATION PASSED: raw hashes, aligned analysis, strict splits, held-out results, figures, three PDFs, standalone Rmd, and CSV package are consistent.")
 
 
 if __name__ == "__main__":

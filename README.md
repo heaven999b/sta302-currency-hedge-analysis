@@ -82,6 +82,7 @@ The held-out exercise measures conditional fit using same-day observed predictor
 │   ├── STA302_Project_Analysis.html
 │   └── pdf/
 │       ├── STA302_Research_Proposal_Official_EN.pdf
+│       ├── STA302_Research_Proposal_Official_ZH.pdf
 │       └── STA302_Bilingual_Research_Proposal.pdf
 ├── submission/                         # Quercus-ready staging package
 │   ├── code/                           # standalone Rmd
@@ -124,6 +125,7 @@ This command:
 ## Primary deliverables / 主要交付物
 
 - `output/pdf/STA302_Research_Proposal_Official_EN.pdf` - formal English-only course submission.
+- `output/pdf/STA302_Research_Proposal_Official_ZH.pdf` - complete Chinese proposal with tables and figures.
 - `output/pdf/STA302_Bilingual_Research_Proposal.pdf` - English proposal followed by a faithful Chinese study copy.
 - `analysis/STA302_Project_Analysis.Rmd` - self-contained course submission containing the full cleaning, modeling, table, and diagnostic code.
 - `output/STA302_Project_Analysis.html` - verified knitted analysis.
