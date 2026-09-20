@@ -40,6 +40,31 @@ once, after the predictive model is selected on the tuning period.
 {analysis_code}
 ```
 
+## From the initial full model to the final predictive model / 从初始全变量模型到最终预测模型
+
+The initial model uses every proposal predictor:
+`Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff`.
+It remains the pre-specified inferential model for the hedge slopes and period
+interaction. Model optimization is a separate, secondary prediction exercise.
+
+初始模型纳入 proposal 中的全部预测变量，并继续作为日元斜率和时期交互项的预设
+推断模型。模型精简只用于次要的样本外条件拟合检查，两种职责不混用。
+
+```{{r model-selection-table, echo=FALSE}}
+knitr::kable(tuning_metrics, digits = 6,
+             caption = "Three predeclared candidates evaluated on the tuning period")
+```
+
+The macro-control candidate has the lowest tuning RMSE, so its locked formula is
+`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`. It is refitted on
+train+tuning and evaluated exactly once on the untouched test set. Variables
+were therefore removed by a predeclared out-of-sample rule, not by individual
+p-values or by inspecting the test result.
+
+宏观控制模型的调优 RMSE 最低，因此最终预测公式保留汇率交互、日经收益、VIX
+变化和滞后利差。它在训练集加调优集上重新拟合后，只对未接触的测试集评估一次；
+删减依据是预设样本外规则，而不是单个 p 值或测试集结果。
+
 ## Main results / 主要结果
 
 ```{{r main-results, echo=FALSE}}

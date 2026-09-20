@@ -362,6 +362,9 @@ Analysis</h1>
 <li><a href="#purpose-and-protocol-%E7%A0%94%E7%A9%B6%E7%9B%AE%E7%9A%84%E4%B8%8E%E6%B5%81%E7%A8%8B" id="toc-purpose-and-protocol-研究目的与流程">Purpose and protocol /
 研究目的与流程</a></li>
 <li><a href="#complete-analysis-code" id="toc-complete-analysis-code">Complete analysis code</a></li>
+<li><a href="#from-the-initial-full-model-to-the-final-predictive-model-%E4%BB%8E%E5%88%9D%E5%A7%8B%E5%85%A8%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B%E5%88%B0%E6%9C%80%E7%BB%88%E9%A2%84%E6%B5%8B%E6%A8%A1%E5%9E%8B" id="toc-from-the-initial-full-model-to-the-final-predictive-model-从初始全变量模型到最终预测模型">From
+the initial full model to the final predictive model /
+从初始全变量模型到最终预测模型</a></li>
 <li><a href="#main-results-%E4%B8%BB%E8%A6%81%E7%BB%93%E6%9E%9C" id="toc-main-results-主要结果">Main results / 主要结果</a></li>
 <li><a href="#assumption-diagnostics-%E5%81%87%E8%AE%BE%E8%AF%8A%E6%96%AD" id="toc-assumption-diagnostics-假设诊断">Assumption diagnostics /
 假设诊断</a></li>
@@ -1297,7 +1300,7 @@ writeLines(log_lines, file.path(results_dir, &quot;R_run_log.txt&quot;))
 cat(paste(log_lines[1:11], collapse = &quot;\n&quot;), &quot;\n&quot;)</code></pre>
 <pre><code>## R version: R version 4.4.3 (2025-02-28)
 ## jsonlite version: 2.0.0
-## Run time UTC: 2026-09-20 20:20:41 UTC
+## Run time UTC: 2026-09-20 20:40:50 UTC
 ## Rows: 2655
 ## Date range: 2014-02-06 to 2026-07-31
 ## Pre/Post rows: 1304 / 1351
@@ -1306,6 +1309,82 @@ cat(paste(log_lines[1:11], collapse = &quot;\n&quot;), &quot;\n&quot;)</code></p
 ## Durbin-Watson: 2.8280
 ## Max VIF: 3.560 (HML)
 ## Selected predictive model: Macro controls</code></pre>
+</div>
+<div id="from-the-initial-full-model-to-the-final-predictive-model-从初始全变量模型到最终预测模型" class="section level2">
+<h2>From the initial full model to the final predictive model /
+从初始全变量模型到最终预测模型</h2>
+<p>The initial model uses every proposal predictor:
+<code>Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff</code>.
+It remains the pre-specified inferential model for the hedge slopes and
+period interaction. Model optimization is a separate, secondary
+prediction exercise.</p>
+<p>初始模型纳入 proposal
+中的全部预测变量，并继续作为日元斜率和时期交互项的预设
+推断模型。模型精简只用于次要的样本外条件拟合检查，两种职责不混用。</p>
+<table style="width:100%;">
+<caption>Three predeclared candidates evaluated on the tuning
+period</caption>
+<colgroup>
+<col width="21%" />
+<col width="10%" />
+<col width="10%" />
+<col width="14%" />
+<col width="13%" />
+<col width="15%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">model</th>
+<th align="right">RMSE</th>
+<th align="right">MAE</th>
+<th align="left">train_start</th>
+<th align="left">train_end</th>
+<th align="left">tuning_start</th>
+<th align="left">tuning_end</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">FX interaction</td>
+<td align="right">0.306621</td>
+<td align="right">0.210237</td>
+<td align="left">2014-02-06</td>
+<td align="left">2021-07-20</td>
+<td align="left">2021-07-21</td>
+<td align="left">2024-01-23</td>
+</tr>
+<tr class="even">
+<td align="left">Macro controls</td>
+<td align="right">0.306190</td>
+<td align="right">0.211877</td>
+<td align="left">2014-02-06</td>
+<td align="left">2021-07-20</td>
+<td align="left">2021-07-21</td>
+<td align="left">2024-01-23</td>
+</tr>
+<tr class="odd">
+<td align="left">Full factor model</td>
+<td align="right">0.307467</td>
+<td align="right">0.214579</td>
+<td align="left">2014-02-06</td>
+<td align="left">2021-07-20</td>
+<td align="left">2021-07-21</td>
+<td align="left">2024-01-23</td>
+</tr>
+</tbody>
+</table>
+<p>The macro-control candidate has the lowest tuning RMSE, so its locked
+formula is
+<code>Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff</code>. It
+is refitted on train+tuning and evaluated exactly once on the untouched
+test set. Variables were therefore removed by a predeclared
+out-of-sample rule, not by individual p-values or by inspecting the test
+result.</p>
+<p>宏观控制模型的调优 RMSE
+最低，因此最终预测公式保留汇率交互、日经收益、VIX
+变化和滞后利差。它在训练集加调优集上重新拟合后，只对未接触的测试集评估一次；
+删减依据是预设样本外规则，而不是单个 p 值或测试集结果。</p>
 </div>
 <div id="main-results-主要结果" class="section level2">
 <h2>Main results / 主要结果</h2>

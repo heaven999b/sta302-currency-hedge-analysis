@@ -10,6 +10,8 @@ data:
   csv_exports: "deterministic copies under data/original_csv; Yahoo JSON is converted without changing observations"
 inference:
   estimator: OLS
+  role: "prespecified explanatory model for hedge slopes and the period interaction"
+  formula: "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"
   primary_covariance: "Newey-West HAC(5)"
   sensitivity_lags: [1, 10]
   alpha: 0.05
@@ -36,9 +38,10 @@ prediction:
   selection_metric: RMSE
   test_policy: "evaluate once after selecting on tuning and refitting on train+tuning"
   candidates:
-    - "Y ~ JPY_app * Post"
-    - "Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff"
-    - "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"
+    - {name: "FX interaction", formula: "Y ~ JPY_app * Post"}
+    - {name: "Macro controls", formula: "Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff"}
+    - {name: "Full factor model", formula: "Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff"}
+  locked_winner: "Macro controls"
   benchmarks: [historical_mean, zero_return]
 randomness:
   stochastic_steps: false

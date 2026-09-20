@@ -65,17 +65,17 @@ Figure 2 provides a six-panel preliminary diagnostic grid. Residuals versus fitt
 
 These are preliminary OLS results. In accordance with the Part 1 instruction, we diagnose but do not correct violations here; robust inference and sensitivity analysis are deferred to the final project.
 
-## Plan for the remaining analysis (285 words)
+## Plan for the remaining analysis (292 words)
 
-The focal terms - yen appreciation, `Post`, and their interaction - will remain because they define the research question. Other controls will first be retained on substantive grounds. We will compare theory-preserving nested models using partial F-tests, adjusted \(R^2\), residual behavior, and focal-coefficient stability. We will not drop a control solely because its p-value exceeds 0.05, and hierarchy will be respected.
+The focal terms - yen appreciation, `Post`, and their interaction - will remain. We will first fit the full ten-predictor specification and retain it as the pre-specified inferential model. Predictive simplification will compare three hierarchy-respecting candidates: (1) the FX interaction alone; (2) macro controls adding Nikkei return, VIX change, and lagged rate differential; and (3) the full factor model additionally containing SMB, HML, RMW, CMA, and MOM. Controls will not be removed by individual p-values.
 
-After every material specification change, we will recheck residual-versus-fitted, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Because the model shows heteroskedasticity, dependence, heavy tails, and functional-form evidence, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation, which is valid for signed returns; a direct logarithm is invalid. Transformations will be compared for assumption improvement and interpretability, not selected to manufacture significance.
+After specification changes, we will recheck residual, Q-Q, time-order, and ACF plots, Breusch-Pagan and Breusch-Godfrey tests, Cook's distance, and VIF. Given heteroskedasticity, dependence, heavy tails, and functional-form evidence, we will examine a pre-specified nonlinear yen term and a Yeo-Johnson response transformation; a direct logarithm is invalid for signed returns. Transformations will be judged by diagnostics, tuning performance, and interpretability, not significance.
 
-Influential dates will be documented before any sensitivity run. The primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and the exclusion of individually justified data errors, if any. Once a final functional form is chosen, classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will also vary the pandemic cut within a small declared window rather than search all dates.
+The primary analysis will retain all observations; secondary analyses will compare declared 0.5/99.5-percentile winsorization and exclusion of confirmed data errors, if any. Classical intervals will be supplemented by Newey-West intervals with 1-, 5-, and 10-day lags. We will vary the pandemic cut within a declared window rather than search all dates.
 
-Prediction remains secondary. A fixed chronological 60/20/20 split will fit candidates on earlier training dates, select by tuning RMSE, and evaluate the locked choice once on the untouched test period against historical-mean and zero-return benchmarks. No random cross-validation or test-set tuning will be used. The frozen raw files, cleaned CSV, code, and outputs will be versioned together.
+Prediction remains secondary. A fixed chronological 60/20/20 split will fit the three candidates on the training period and select the lowest tuning RMSE. The locked winner will then be refitted on train plus tuning and evaluated exactly once on the untouched test period against historical-mean and zero-return benchmarks. The full model remains the basis for confirmatory coefficient inference; the reduced winner is the final predictive model. No random cross-validation, test-set tuning, or post-test reselection will be used.
 
-The schedule in Table 3 assigns analysis, poster, and recording milestones. Member placeholders will be replaced with names from the signed Teamwork Agreement before submission.
+Frozen data, code, outputs, and selection evidence will be versioned together. Table 3 assigns project milestones; member placeholders will be replaced from the signed agreement.
 
 ## References
 

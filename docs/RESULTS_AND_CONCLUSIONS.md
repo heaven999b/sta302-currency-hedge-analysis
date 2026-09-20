@@ -19,6 +19,33 @@ HAC(5). HAC(1) and HAC(10) are reported as prespecified sensitivity checks.
 主条件均值模型仍用 OLS 估计系数；由于残差检验拒绝 iid，主要置信区间和
 p 值使用 Newey-West HAC(5)，并报告 HAC(1) 与 HAC(10) 敏感性结果。
 
+## Initial and final model roles / 初始模型与最终模型职责
+
+The analysis deliberately keeps inference and prediction separate. The initial
+full model is
+`Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff`.
+It uses all ten predictors required by the proposal and remains the
+pre-specified model for the hedge-slope and period-interaction inference.
+
+For secondary conditional prediction, three candidates were fitted on the
+1,593-row training period: the FX-interaction model, the macro-control model,
+and the full factor model. Their tuning RMSE values were 0.30662, 0.30619, and
+0.30747, respectively. The macro-control model therefore won under the locked
+rule and has final formula
+`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`.
+It was refitted on train+tuning before one untouched-test evaluation. This
+reduction was selected by out-of-sample RMSE, not by deleting insignificant
+coefficients.
+
+本研究刻意区分解释性推断和预测。初始完整模型为
+`Y ~ JPY_app * Post + Nikkei_ret + SMB + HML + RMW + CMA + MOM + dlog_VIX + rate_diff`，
+包含 proposal 要求的全部十个预测变量，并继续承担日元斜率和时期交互项的预设推断。
+次要预测环节仅在 1,593 条训练样本上拟合汇率交互、宏观控制和完整因子三个候选模型；
+其调优 RMSE 分别为 0.30662、0.30619 和 0.30747。因此按锁定规则选择宏观控制模型：
+`Y ~ JPY_app * Post + Nikkei_ret + dlog_VIX + rate_diff`。
+该模型用训练集加调优集重新拟合后，只在未接触的测试集上评估一次。精简依据是样本外
+RMSE，而不是删除不显著变量。
+
 ## Main inference / 主要推断
 
 - Pre-period yen slope: -0.85094; HAC(5) test against -1, p = 0.000005.
